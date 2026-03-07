@@ -1,0 +1,12 @@
+{
+  "name": "shrimp-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "chat": "pnpm --filter chat run dev",
+    "server": "pnpm --filter server run start:dev",
+    "ws-server": "pnpm --filter server run start:dev"
+  }
+}
