@@ -22,12 +22,31 @@ interface SidebarProps {
   onThemeChange: () => void;
   // id of the currently active session, if any
   activeSessionId: string | null;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ historySessions, onSessionSelect, onCreateSession, theme, onThemeChange, activeSessionId }) => {
+const Sidebar: React.FC<SidebarProps> = ({ historySessions, onSessionSelect, onCreateSession, theme, onThemeChange, activeSessionId, isCollapsed, onToggleCollapse }) => {
 
   return (
-    <div className={`w-64 flex flex-col h-screen ${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'}`}>
+    <>
+      {/* Mobile Overlay */}
+      {!isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={onToggleCollapse}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`
+        flex flex-col h-screen transition-all duration-300 z-50
+        ${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900'}
+        w-64
+        ${isCollapsed ? 'md:absolute md:-translate-x-full' : 'md:relative md:translate-x-0'}
+        fixed left-0 top-0
+        ${isCollapsed ? '-translate-x-full' : 'translate-x-0'}
+      `}>
       {/* Top Section */}
       <div className={`p-4 border-b`}>
         <div className="flex items-center mb-4">
@@ -101,6 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ historySessions, onSessionSelect, onC
         </ul>
       </div>
     </div>
+    </>
   );
 };
 

@@ -3,7 +3,7 @@
 chat web page using HTML, CSS, and JavaScript.
 
 - famework: React
-- language: JavaScript
+- language: JavaScript，HTML，CSS，TypeScript
 
 ### development
 

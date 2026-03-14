@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import ModelHeader from './components/ModelHeader';
 import ChatWindow from './components/ChatWindow';
 import InputSend from './components/InputSend';
+import { isMobile } from './lib/utils';
 
 interface Message {
   id: string;
@@ -26,6 +27,7 @@ function App() {
   const [input, setInput] = useState('');
   const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(isMobile());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     // 从 localStorage 读取保存的主题，默认为 'light'
     const saved = localStorage.getItem('theme');
@@ -37,6 +39,10 @@ function App() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
   useEffect(() => {
@@ -162,12 +168,14 @@ function App() {
         theme={theme}
         onThemeChange={handleThemeChange}
         activeSessionId={currentSessionId}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
       {/* Right Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Model Header */}
-        <ModelHeader modelName="OpenAI" messageStatus={messageStatus} theme={theme} />
+        <ModelHeader modelName="OpenAI" messageStatus={messageStatus} theme={theme} onToggleCollapse={toggleSidebar} />
 
         {/* Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
