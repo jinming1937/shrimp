@@ -1,5 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm'; // 支持GitHub Flavored Markdown
+
 
 interface Message {
   id: string;
@@ -48,7 +50,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
           }`}>
             <div className={`prose prose-sm max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
               {msg.role === 'robot' ? (
-                <ReactMarkdown>{msg.isLoading ? 'Loading...' : msg.text}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.isLoading ? 'Loading...' : msg.text}</ReactMarkdown>
               ) : (
                 msg.isLoading ? 'Loading...' : msg.text
               )}
