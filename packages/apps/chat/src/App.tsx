@@ -9,7 +9,7 @@ import { isMobile } from './lib/utils';
 interface Message {
   id: string;
   text: string;
-  role: 'user' | 'robot';
+  role: 'user' | 'system' | 'assistant' | 'robot';
   isLoading?: boolean;
   messageId?: string; // deprecated, use id
 }
@@ -24,7 +24,6 @@ function App() {
   const [historySessions, setHistorySessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
   const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(isMobile());
@@ -80,7 +79,7 @@ function App() {
         } else {
           const currentMsgId = data.message.id;
           const matchLoadingIndex = prev.findIndex(
-            msg => msg.isLoading && msg.role === 'robot' && msg.id === currentMsgId
+            msg => msg.isLoading && msg.role === 'system' && msg.id === currentMsgId
           );
           if (matchLoadingIndex !== -1) {
             // replace the placeholder loading message
@@ -112,7 +111,7 @@ function App() {
       socket.off('message', handleMessage);
       socket.off('joined', handleJoined);
     };
-  }, [socket]);
+  }, [socket, currentSessionId]);
 
   const createNewSession = () => {
     if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {
@@ -140,21 +139,20 @@ function App() {
       .catch(console.error);
   };
 
-  const sendMessage = () => {
+  const sendMessage = (input: string) => {
     const newId = currentSessionId || Date.now().toString();
     if (!currentSessionId) {
       setCurrentSessionId(newId);
       if (socket) {
         socket.emit('joinSession', newId);
       }
+    } else {
+      socket.emit('joinSession', currentSessionId);
     }
     if (input.trim() && socket) {
       setMessages(prev => [...prev, { id: `${Date.now()}`, text: input, role: 'user' }]);
       console.log('Sending message:', input);
       socket.emit('sendMessage', { message: input, sessionId: newId, role: 'user' });
-      // the server will broadcast this same user message back to us so
-      // we don't need to manually append it here and risk duplicates
-      setInput('');
     }
   };
 
@@ -184,7 +182,7 @@ function App() {
 
         {/* Input Area */}
         <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}`}>
-          <InputSend input={input} setInput={setInput} onSend={sendMessage} theme={theme} />
+          <InputSend onSend={sendMessage} theme={theme} />
         </div>
       </div>
     </div>

@@ -27,6 +27,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.16",
     "@nestjs/websockets": "^11.1.16",
+    "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "mysql2": "^3.19.1",
     "openai": "^6.27.0",

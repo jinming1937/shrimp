@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface InputSendProps {
-  input: string;
-  setInput: (value: string) => void;
-  onSend: () => void;
+  onSend: (input: string) => void;
   theme?: 'light' | 'dark';
 }
 
-const InputSend: React.FC<InputSendProps> = ({ input, setInput, onSend, theme = 'light' }) => {
+const InputSend: React.FC<InputSendProps> = ({ onSend, theme = 'light' }) => {
+  const [input, setInput] = useState('');
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      onSend();
+      onSend(input);
+
+      setInput('');
     }
+  };
+
+  const onClick = () => {
+    onSend(input);
+    setInput('');
   };
 
   return (
@@ -28,7 +34,7 @@ const InputSend: React.FC<InputSendProps> = ({ input, setInput, onSend, theme = 
         }`}
         placeholder="输入消息..."
       />
-      <button onClick={onSend} className="bg-blue-500 hover:bg-blue-600 text-white px-4 rounded">
+      <button onClick={onClick} className="bg-blue-500 hover:bg-blue-600 text-white px-4 rounded">
         发送
       </button>
     </div>
