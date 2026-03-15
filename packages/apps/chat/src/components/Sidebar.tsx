@@ -2,7 +2,7 @@ import React from 'react';
 
 interface Message {
   text: string;
-  role: 'user' | 'robot';
+  role: 'user' | 'robot' | 'system' | 'assistant';
   isLoading?: boolean;
   messageId?: string;
 }

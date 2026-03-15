@@ -1,12 +1,13 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // 支持GitHub Flavored Markdown
+import { chatIdentify } from '../lib/utils';
 
 
 interface Message {
   id: string;
   text: string;
-  role: 'user' | 'robot';
+  role: 'user' | 'robot' | 'system' | 'assistant';
   isLoading?: boolean;
   messageId?: string; // deprecated, use id
 }
@@ -38,7 +39,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
             msg.role === 'user' ? 'justify-end' : 'justify-start'
           }`}
         >
-          {msg.role === 'robot' && (
+          {chatIdentify(msg.role) && (
             <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
               🤖
             </div>
@@ -49,7 +50,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
               : 'bg-white'
           }`}>
             <div className={`prose prose-sm max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
-              {msg.role === 'robot' ? (
+              {chatIdentify(msg.role) ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.isLoading ? 'Loading...' : msg.text}</ReactMarkdown>
               ) : (
                 msg.isLoading ? 'Loading...' : msg.text
