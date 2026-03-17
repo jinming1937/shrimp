@@ -64,7 +64,7 @@ jobs:
 
       - name: Build Android APK
         working-directory: packages/apps/rn
-        run: eas build --platform android --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
+        run: eas build --platform android --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive --clear-cache
 
       - name: Download build artifacts
         if: github.event.inputs.profile == 'preview' || github.event.inputs.profile == 'production'

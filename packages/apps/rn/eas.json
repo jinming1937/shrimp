@@ -16,6 +16,9 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "NODE_ENV": "production"
       }
     },
     "production": {
