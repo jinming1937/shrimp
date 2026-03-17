@@ -19,10 +19,9 @@ on:
         options:
           - development
           - preview
-          - production
 
 jobs:
-  build-ios:
+  build-ios-simulator:
     runs-on: macos-latest
 
     steps:
@@ -62,26 +61,24 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build iOS App
+      - name: Build iOS Simulator App
         working-directory: packages/apps/rn
-        run: eas build --platform ios --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
+        run: eas build --platform ios --profile preview --non-interactive
 
       - name: Download build artifacts
-        if: github.event.inputs.profile == 'preview' || github.event.inputs.profile == 'production'
         working-directory: packages/apps/rn
         run: |
           # Get the build URL from EAS
           BUILD_URL=$(eas build:list --platform ios --limit 1 --json | jq -r '.[0].artifacts.buildUrl')
           if [ -n "$BUILD_URL" ]; then
-            curl -L -o ios-build.ipa "$BUILD_URL"
+            curl -L -o ios-build.tar.gz "$BUILD_URL"
           fi
 
-      - name: Upload IPA artifact
-        if: github.event.inputs.profile == 'preview' || github.event.inputs.profile == 'production'
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ipa
-          path: packages/apps/rn/ios-build.ipa
+          name: ios-simulator-build
+          path: packages/apps/rn/ios-build.tar.gz
           retention-days: 30
 
   build-ios-local:
