@@ -18,6 +18,7 @@ import { DollConfig } from '../types';
 type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
+  AISettings: undefined;
 };
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
@@ -241,6 +242,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
           </View>
         </View>
 
+        {/* AI Settings Button */}
+        <TouchableOpacity
+          style={styles.aiSettingsButton}
+          onPress={() => navigation.navigate('AISettings')}
+        >
+          <Ionicons name="sparkles" size={20} color="#FF69B4" />
+          <Text style={styles.aiSettingsButtonText}>AI模型设置</Text>
+          <Ionicons name="chevron-forward" size={20} color="#999" style={styles.aiSettingsArrow} />
+        </TouchableOpacity>
+
         {/* Reset Button */}
         <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
           <Ionicons name="refresh" size={20} color="#FF6B6B" />
@@ -433,6 +444,31 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: '#FF6B6B',
     fontWeight: '600',
+  },
+  aiSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  aiSettingsButtonText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  aiSettingsArrow: {
+    marginLeft: 'auto',
   },
   bottomPadding: {
     height: 40,

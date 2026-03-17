@@ -281,7 +281,7 @@ const DollCharacter: React.FC<DollCharacterProps> = ({ scale = 1 }) => {
             <Circle cx="128" cy="72" r="3" fill="white" />
           </G>
 
-          {/* Eyelashes */}
+          {/* Eyelashes ok */}
           <Path
             d="M60 65 Q75 55 90 65"
             stroke="#333"

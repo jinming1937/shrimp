@@ -1,23 +1,96 @@
 import axios from 'axios';
 import * as Speech from 'expo-speech';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DollConfig } from '../types';
 
-const API_URL = 'https://api.openai.com/v1/chat/completions';
+// API配置
+const API_CONFIG = {
+  openai: {
+    url: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o-mini',
+  },
+  qwen: {
+    url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    model: 'qwen-turbo',
+  },
+};
+
+const AI_CONFIG_KEY = '@ai-config';
+
+type AIProvider = 'openai' | 'qwen';
 
 interface AIResponse {
   text: string;
   action?: string;
 }
 
-class AIService {
-  private apiKey: string;
+interface AIConfig {
+  provider: AIProvider;
+  apiKey: string;
+  model?: string;
+}
 
-  constructor(apiKey: string = '') {
-    this.apiKey = apiKey;
+class AIService {
+  private config: AIConfig = {
+    provider: 'qwen', // 默认使用通义千问
+    apiKey: '',
+  };
+  private configLoaded: boolean = false;
+
+  constructor() {
+    this.loadConfig();
   }
 
-  setApiKey(key: string) {
-    this.apiKey = key;
+  // 从存储加载配置
+  private async loadConfig() {
+    try {
+      const configJson = await AsyncStorage.getItem(AI_CONFIG_KEY);
+      if (configJson) {
+        this.config = { ...this.config, ...JSON.parse(configJson) };
+      }
+      this.configLoaded = true;
+    } catch (e) {
+      console.log('No saved AI config found');
+      this.configLoaded = true;
+    }
+  }
+
+  // 保存配置到存储
+  private async saveConfig() {
+    try {
+      await AsyncStorage.setItem(AI_CONFIG_KEY, JSON.stringify(this.config));
+    } catch (e) {
+      console.error('Failed to save AI config:', e);
+    }
+  }
+
+  // 设置API配置
+  async setConfig(config: Partial<AIConfig>) {
+    this.config = { ...this.config, ...config };
+    await this.saveConfig();
+  }
+
+  // 获取当前配置
+  getConfig(): AIConfig {
+    return { ...this.config };
+  }
+
+  // 设置API Key
+  async setApiKey(apiKey: string) {
+    this.config.apiKey = apiKey;
+    await this.saveConfig();
+  }
+
+  // 设置AI提供商
+  async setProvider(provider: AIProvider) {
+    this.config.provider = provider;
+    await this.saveConfig();
+  }
+
+  // 设置自定义模型
+  async setModel(model: string) {
+    this.config.model = model;
+    await this.saveConfig();
   }
 
   async sendMessage(
@@ -25,13 +98,13 @@ class AIService {
     dollConfig: DollConfig,
     history: { text: string; isUser: boolean }[] = []
   ): Promise<AIResponse> {
-    if (!this.apiKey) {
+    if (!this.config.apiKey) {
       return this.getMockResponse(message, dollConfig);
     }
 
     try {
       const personalityPrompt = this.getPersonalityPrompt(dollConfig);
-      
+
       const messages = [
         {
           role: 'system',
@@ -52,17 +125,20 @@ class AIService {
         { role: 'user', content: message },
       ];
 
+      const apiUrl = API_CONFIG[this.config.provider].url;
+      const model = this.config.model || API_CONFIG[this.config.provider].model;
+
       const response = await axios.post(
-        API_URL,
+        apiUrl,
         {
-          model: 'gpt-4o-mini',
+          model,
           messages,
           temperature: 0.8,
           max_tokens: 150,
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.config.apiKey}`,
             'Content-Type': 'application/json',
           },
         }
@@ -97,21 +173,21 @@ class AIService {
 
   private getMockResponse(message: string, dollConfig: DollConfig): AIResponse {
     const lowerMsg = message.toLowerCase();
-    
+
     if (lowerMsg.includes('跳舞') || lowerMsg.includes('dance')) {
       return {
         text: `好的呀，${dollConfig.name}给你跳支舞！`,
         action: 'dance',
       };
     }
-    
+
     if (lowerMsg.includes('你好') || lowerMsg.includes('hello')) {
       return {
         text: `你好呀！我是${dollConfig.name}，很高兴见到你！`,
         action: 'wave',
       };
     }
-    
+
     if (lowerMsg.includes('再见') || lowerMsg.includes('bye')) {
       return {
         text: '再见啦！记得想我哦~',

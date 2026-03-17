@@ -5,10 +5,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AISettingsScreen from './src/screens/AISettingsScreen';
 
 export type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
+  AISettings: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -28,6 +30,14 @@ export default function App() {
           <Stack.Screen
             name="Settings"
             component={SettingsScreen}
+            options={{
+              presentation: 'modal',
+              animationEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="AISettings"
+            component={AISettingsScreen}
             options={{
               presentation: 'modal',
               animationEnabled: true,
