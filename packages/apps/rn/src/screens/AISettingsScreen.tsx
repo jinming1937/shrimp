@@ -8,12 +8,12 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Switch,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import aiService from '../services/aiService';
+import { useTranslation } from '../hooks/useTranslation';
 
 type RootStackParamList = {
   Home: undefined;
@@ -35,24 +35,25 @@ interface AIConfig {
   model?: string;
 }
 
-const PROVIDERS = [
+const getProviders = (t: (key: string) => string) => [
   {
     key: 'qwen' as AIProvider,
-    name: '通义千问 (Qwen)',
-    description: '阿里云大模型，国内访问稳定',
+    name: t('aiSettings.providers.qwen.name'),
+    description: t('aiSettings.providers.qwen.description'),
     defaultModel: 'qwen-turbo',
     models: ['qwen-turbo', 'qwen-plus', 'qwen-max'],
   },
   {
     key: 'openai' as AIProvider,
-    name: 'OpenAI',
-    description: 'GPT模型，需要国外网络',
+    name: t('aiSettings.providers.openai.name'),
+    description: t('aiSettings.providers.openai.description'),
     defaultModel: 'gpt-4o-mini',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
   },
 ];
 
 const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
+  const { t } = useTranslation();
   const [config, setConfig] = useState<AIConfig>({
     provider: 'qwen',
     apiKey: '',
@@ -60,6 +61,8 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const PROVIDERS = getProviders(t);
 
   useEffect(() => {
     loadConfig();
@@ -74,21 +77,21 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
     setIsLoading(true);
     try {
       await aiService.setConfig(config);
-      Alert.alert('保存成功', 'AI配置已更新！', [
-        { text: '确定', onPress: () => navigation.goBack() },
+      Alert.alert(t('messages.saveSuccess'), t('messages.configUpdated'), [
+        { text: t('common.confirm'), onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      Alert.alert('保存失败', '请检查配置是否正确');
+      Alert.alert(t('messages.saveError'), t('common.error'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClear = async () => {
-    Alert.alert('确认清除', '确定要清除API Key吗？', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(t('common.confirm'), t('messages.clearConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '确定',
+        text: t('common.confirm'),
         onPress: async () => {
           await aiService.setApiKey('');
           setConfig({ ...config, apiKey: '' });
@@ -111,14 +114,14 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI设置</Text>
+        <Text style={styles.headerTitle}>{t('aiSettings.title')}</Text>
         <TouchableOpacity
           style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={isLoading}
         >
           <Text style={styles.saveButtonText}>
-            {isLoading ? '保存中...' : '保存'}
+            {isLoading ? t('common.loading') : t('common.save')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -126,7 +129,7 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Provider Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>选择AI模型</Text>
+          <Text style={styles.sectionTitle}>{t('aiSettings.selectModel')}</Text>
           {PROVIDERS.map((provider) => (
             <TouchableOpacity
               key={provider.key}
@@ -166,7 +169,7 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
         {/* Model Selection */}
         {selectedProvider && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>选择模型版本</Text>
+            <Text style={styles.sectionTitle}>{t('aiSettings.selectVersion')}</Text>
             <View style={styles.modelGrid}>
               {selectedProvider.models.map((model) => (
                 <TouchableOpacity
@@ -193,13 +196,13 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
 
         {/* API Key Input */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API Key</Text>
+          <Text style={styles.sectionTitle}>{t('aiSettings.apiKey')}</Text>
           <View style={styles.apiKeyContainer}>
             <TextInput
               style={styles.apiKeyInput}
               value={config.apiKey}
               onChangeText={(text) => setConfig({ ...config, apiKey: text })}
-              placeholder={`输入${selectedProvider?.name} API Key`}
+              placeholder={t('aiSettings.apiKeyPlaceholder', { provider: selectedProvider?.name })}
               placeholderTextColor="#999"
               secureTextEntry={!showApiKey}
               autoCapitalize="none"
@@ -222,8 +225,8 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
             <Ionicons name="information-circle" size={16} color="#666" />
             <Text style={styles.helpText}>
               {config.provider === 'qwen'
-                ? '获取通义千问API Key: https://dashscope.aliyun.com/'
-                : '获取OpenAI API Key: https://platform.openai.com/api-keys'}
+                ? t('aiSettings.helpText.qwen')
+                : t('aiSettings.helpText.openai')}
             </Text>
           </View>
 
@@ -233,7 +236,7 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
               onPress={handleClear}
             >
               <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-              <Text style={styles.clearButtonText}>清除API Key</Text>
+              <Text style={styles.clearButtonText}>{t('aiSettings.clearApiKey')}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -243,27 +246,24 @@ const AISettingsScreen: React.FC<AISettingsScreenProps> = ({ navigation }) => {
           style={styles.testButton}
           onPress={() => {
             if (!config.apiKey) {
-              Alert.alert('提示', '请先输入API Key');
+              Alert.alert(t('common.confirm'), t('messages.enterApiKey'));
               return;
             }
             Alert.alert(
-              '测试连接',
-              '保存配置后，和卡通人物对话即可测试连接是否成功。'
+              t('aiSettings.testConnection'),
+              t('aiSettings.note.content')
             );
           }}
         >
           <Ionicons name="flash" size={20} color="#FF69B4" />
-          <Text style={styles.testButtonText}>测试连接</Text>
+          <Text style={styles.testButtonText}>{t('aiSettings.testConnection')}</Text>
         </TouchableOpacity>
 
         {/* Note */}
         <View style={styles.noteContainer}>
-          <Text style={styles.noteTitle}>💡 使用说明</Text>
+          <Text style={styles.noteTitle}>{t('aiSettings.note.title')}</Text>
           <Text style={styles.noteText}>
-            1. 不设置API Key时，应用会使用内置的模拟回复{'\n'}
-            2. 设置API Key后，卡通人物会使用AI模型进行智能回复{'\n'}
-            3. API Key仅保存在本地，不会上传到任何服务器{'\n'}
-            4. 通义千问对中文支持更好，推荐国内用户使用
+            {t('aiSettings.note.content')}
           </Text>
         </View>
 

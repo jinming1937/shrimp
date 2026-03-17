@@ -14,11 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDollStore } from '../store/dollStore';
 import { DollConfig } from '../types';
+import { useTranslation } from '../hooks/useTranslation';
 
 type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
   AISettings: undefined;
+  LanguageSettings: undefined;
 };
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
@@ -34,29 +36,32 @@ const COLORS = {
   outfit: ['#FF69B4', '#FF1493', '#FFB6C1', '#FFC0CB', '#FF6347', '#40E0D0', '#DDA0DD'],
 };
 
-const PERSONALITIES = [
-  { key: 'cute', label: '可爱', icon: 'heart' },
-  { key: 'sexy', label: '性感', icon: 'flame' },
-  { key: 'playful', label: '调皮', icon: 'happy' },
-  { key: 'elegant', label: '优雅', icon: 'flower' },
+const getPersonalities = (t: (key: string) => string) => [
+  { key: 'cute', label: t('settings.personalities.cute'), icon: 'heart' },
+  { key: 'sexy', label: t('settings.personalities.sexy'), icon: 'flame' },
+  { key: 'playful', label: t('settings.personalities.playful'), icon: 'happy' },
+  { key: 'elegant', label: t('settings.personalities.elegant'), icon: 'flower' },
 ] as const;
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const { config, setConfig, resetConfig } = useDollStore();
+  const { t } = useTranslation();
   const [localConfig, setLocalConfig] = useState<DollConfig>(config);
+
+  const PERSONALITIES = getPersonalities(t);
 
   const handleSave = () => {
     setConfig(localConfig);
-    Alert.alert('保存成功', '卡通人物设置已更新！', [
-      { text: '确定', onPress: () => navigation.goBack() },
+    Alert.alert(t('messages.saveSuccess'), t('messages.configUpdated'), [
+      { text: t('common.confirm'), onPress: () => navigation.goBack() },
     ]);
   };
 
   const handleReset = () => {
-    Alert.alert('确认重置', '确定要恢复默认设置吗？', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(t('common.confirm'), t('messages.resetConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '确定',
+        text: t('common.confirm'),
         onPress: () => {
           resetConfig();
           setLocalConfig({
@@ -117,28 +122,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>设置</Text>
+        <Text style={styles.headerTitle}>{t('settings.title')}</Text>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>保存</Text>
+          <Text style={styles.saveButtonText}>{t('common.save')}</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Name Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>名字</Text>
+          <Text style={styles.sectionTitle}>{t('settings.name')}</Text>
           <TextInput
             style={styles.nameInput}
             value={localConfig.name}
             onChangeText={(text) => setLocalConfig({ ...localConfig, name: text })}
-            placeholder="输入名字"
+            placeholder={t('settings.namePlaceholder')}
             maxLength={10}
           />
         </View>
 
         {/* Personality Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>性格</Text>
+          <Text style={styles.sectionTitle}>{t('settings.personality')}</Text>
           <View style={styles.personalityGrid}>
             {PERSONALITIES.map((p) => (
               <TouchableOpacity
@@ -171,31 +176,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
         {/* Appearance Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>外观</Text>
+          <Text style={styles.sectionTitle}>{t('settings.appearance')}</Text>
 
           <ColorPicker
-            label="发色"
+            label={t('settings.hairColor')}
             colors={COLORS.hair}
             selected={localConfig.hairColor}
             onSelect={(color) => setLocalConfig({ ...localConfig, hairColor: color })}
           />
 
           <ColorPicker
-            label="肤色"
+            label={t('settings.skinColor')}
             colors={COLORS.skin}
             selected={localConfig.skinColor}
             onSelect={(color) => setLocalConfig({ ...localConfig, skinColor: color })}
           />
 
           <ColorPicker
-            label="眼睛颜色"
+            label={t('settings.eyeColor')}
             colors={COLORS.eyes}
             selected={localConfig.eyeColor}
             onSelect={(color) => setLocalConfig({ ...localConfig, eyeColor: color })}
           />
 
           <ColorPicker
-            label="服装颜色"
+            label={t('settings.outfitColor')}
             colors={COLORS.outfit}
             selected={localConfig.outfitColor}
             onSelect={(color) => setLocalConfig({ ...localConfig, outfitColor: color })}
@@ -204,7 +209,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
         {/* Preview */}
         <View style={styles.previewSection}>
-          <Text style={styles.sectionTitle}>预览</Text>
+          <Text style={styles.sectionTitle}>{t('settings.preview')}</Text>
           <View style={styles.previewContainer}>
             <View style={styles.previewDoll}>
               <View
@@ -242,20 +247,30 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Language Settings Button */}
+        <TouchableOpacity
+          style={styles.languageSettingsButton}
+          onPress={() => navigation.navigate('LanguageSettings')}
+        >
+          <Ionicons name="language" size={20} color="#FF69B4" />
+          <Text style={styles.languageSettingsButtonText}>{t('settings.language')}</Text>
+          <Ionicons name="chevron-forward" size={20} color="#999" style={styles.languageSettingsArrow} />
+        </TouchableOpacity>
+
         {/* AI Settings Button */}
         <TouchableOpacity
           style={styles.aiSettingsButton}
           onPress={() => navigation.navigate('AISettings')}
         >
           <Ionicons name="sparkles" size={20} color="#FF69B4" />
-          <Text style={styles.aiSettingsButtonText}>AI模型设置</Text>
+          <Text style={styles.aiSettingsButtonText}>{t('settings.aiSettings')}</Text>
           <Ionicons name="chevron-forward" size={20} color="#999" style={styles.aiSettingsArrow} />
         </TouchableOpacity>
 
         {/* Reset Button */}
         <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
           <Ionicons name="refresh" size={20} color="#FF6B6B" />
-          <Text style={styles.resetButtonText}>恢复默认设置</Text>
+          <Text style={styles.resetButtonText}>{t('settings.reset')}</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
@@ -468,6 +483,31 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   aiSettingsArrow: {
+    marginLeft: 'auto',
+  },
+  languageSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  languageSettingsButtonText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  languageSettingsArrow: {
     marginLeft: 'auto',
   },
   bottomPadding: {

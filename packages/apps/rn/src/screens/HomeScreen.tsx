@@ -18,6 +18,7 @@ import MessageBubble from '../components/MessageBubble';
 import { useDollStore } from '../store/dollStore';
 import { useChatStore } from '../store/chatStore';
 import aiService from '../services/aiService';
+import { useTranslation } from '../hooks/useTranslation';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ interface HomeScreenProps {
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { config, setAnimation } = useDollStore();
   const { messages, addMessage, voiceState, isAITyping } = useChatStore();
+  const { t } = useTranslation();
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -120,7 +122,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {messages.length === 0 ? (
               <View style={styles.welcomeContainer}>
                 <Animated.Text style={[styles.welcomeText, { opacity: fadeAnim }]}>
-                  按住下方按钮，开始和{config.name}对话吧~
+                  {t('home.welcome', { name: config.name })}
                 </Animated.Text>
               </View>
             ) : (
@@ -153,7 +155,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <View style={styles.statusContainer}>
           <Animated.View style={styles.listeningIndicator}>
             <Ionicons name="mic" size={20} color="#FF69B4" />
-            <Animated.Text style={styles.statusText}>正在聆听...</Animated.Text>
+            <Animated.Text style={styles.statusText}>{t('home.listening')}</Animated.Text>
           </Animated.View>
         </View>
       )}
