@@ -25,7 +25,7 @@ export default function App() {
           initialRouteName="Home"
           screenOptions={{
             headerShown: false,
-            cardStyle: { backgroundColor: '#fff0f5' },
+            cardStyle: { backgroundColor: '#FFF0F5' },
           }}
         >
           <Stack.Screen name="Home" component={HomeScreen} />
