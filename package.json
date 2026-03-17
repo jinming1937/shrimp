@@ -7,6 +7,9 @@
   "scripts": {
     "chat": "pnpm --filter chat run dev",
     "server": "pnpm --filter server run start:dev",
-    "ws-server": "pnpm --filter server run start:dev"
+    "ws-server": "pnpm --filter server run start:dev",
+    "rn": "pnpm --filter ai-doll start",
+    "rn:android": "pnpm --filter ai-doll android",
+    "rn:ios": "pnpm --filter ai-doll ios"
   }
 }

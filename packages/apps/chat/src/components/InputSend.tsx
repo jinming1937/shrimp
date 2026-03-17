@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { Theme } from '../type';
 
 interface InputSendProps {
   onSend: (input: string) => void;
-  theme?: 'light' | 'dark';
+  theme?: Theme;
 }
 
 const InputSend: React.FC<InputSendProps> = ({ onSend, theme = 'light' }) => {

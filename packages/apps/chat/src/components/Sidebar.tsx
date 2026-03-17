@@ -1,32 +1,16 @@
 import React from 'react';
-
-interface Message {
-  text: string;
-  role: 'user' | 'robot' | 'system' | 'assistant';
-  isLoading?: boolean;
-  messageId?: string;
-}
-
-interface Session {
-  id: string;
-  title: string;
-  messages: Message[];
-  firstMessage?: string;
-}
+import { Theme } from '../type';
 
 interface SidebarProps {
-  historySessions: Session[];
-  onSessionSelect: (sessionId: string) => void;
   onCreateSession: () => void;
-  theme: 'light' | 'dark';
+  theme: Theme;
   onThemeChange: () => void;
-  // id of the currently active session, if any
-  activeSessionId: string | null;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  children: React.ReactElement;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ historySessions, onSessionSelect, onCreateSession, theme, onThemeChange, activeSessionId, isCollapsed, onToggleCollapse }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onCreateSession, theme, onThemeChange, isCollapsed, onToggleCollapse, children }) => {
 
   return (
     <>
@@ -90,35 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ historySessions, onSessionSelect, onC
           </button>
         </div>
       </div>
-
-      {/* Bottom Section - History Sessions */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <h3 className={`px-4 pt-4 pb-4 text-sm font-bold mb-4`}>
-          历史会话
-        </h3>
-        <ul className="flex-1 overflow-y-auto px-2">
-          {historySessions.map((session) => {
-            const isActive = session.id === activeSessionId;
-            return (
-              <li key={session.id} className="mb-2">
-                <button
-                  className={`w-full text-left p-2 text-sm truncate ${
-                    isActive
-                      ? 'bg-gray-200 font-semibold text-gray-900'
-                      : theme === 'dark'
-                      ? 'bg-gray-700 hover:bg-gray-600'
-                      : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
-                  onClick={() => onSessionSelect(session.id)}
-                >
-                {session.messages && session.messages.length > 0
-                  ? session.messages[0].text.substring(0, 30)
-                  : session.firstMessage || session.title || '无标题会话' }
-              </button>
-            </li>)
-          })}
-        </ul>
-      </div>
+      {children}
     </div>
     </>
   );

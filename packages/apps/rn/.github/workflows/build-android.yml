@@ -1,0 +1,120 @@
+name: Build Android App
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'packages/apps/rn/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/apps/rn/**'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/apps/rn
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/apps/rn/package-lock.json
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK
+        run: eas build --platform android --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
+
+      - name: Download build artifacts
+        if: github.event.inputs.profile == 'preview' || github.event.inputs.profile == 'production'
+        run: |
+          # Get the build URL from EAS
+          BUILD_URL=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].artifacts.buildUrl')
+          if [ -n "$BUILD_URL" ]; then
+            curl -L -o android-build.apk "$BUILD_URL"
+          fi
+
+      - name: Upload APK artifact
+        if: github.event.inputs.profile == 'preview' || github.event.inputs.profile == 'production'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: packages/apps/rn/android-build.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && github.event.inputs.profile == 'production'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: AI Doll Android v${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+  build-android-local:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: packages/apps/rn
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/apps/rn/package-lock.json
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Run ESLint
+        run: pnpm run lint
+
+      - name: Run tests
+        run: pnpm test -- --passWithNoTests

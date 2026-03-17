@@ -5,32 +5,20 @@ import ModelHeader from './components/ModelHeader';
 import ChatWindow from './components/ChatWindow';
 import InputSend from './components/InputSend';
 import { isMobile } from './lib/utils';
-
-interface Message {
-  id: string;
-  text: string;
-  role: 'user' | 'system' | 'assistant' | 'robot';
-  isLoading?: boolean;
-  messageId?: string; // deprecated, use id
-}
-
-interface Session {
-  id: string;
-  title: string;
-  messages: Message[];
-}
+import { HistoryList } from './components/HistoryList';
+import { IMessage, ISession, Theme } from './type';
 
 function App() {
-  const [historySessions, setHistorySessions] = useState<Session[]>([]);
+  const [historySessions, setHistorySessions] = useState<ISession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<IMessage[]>([]);
   const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(isMobile());
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [theme, setTheme] = useState<Theme>(() => {
     // 从 localStorage 读取保存的主题，默认为 'light'
     const saved = localStorage.getItem('theme');
-    return (saved as 'light' | 'dark') || 'light';
+    return (saved as Theme) || 'light';
   });
 
   // 主题切换时保存到 localStorage
@@ -70,7 +58,7 @@ function App() {
       return;
     }
 
-    const handleMessage = (data: { message: Message; sessionId: string }) => {
+    const handleMessage = (data: { message: IMessage; sessionId: string }) => {
       console.log('Looking for loading message with id:', data);
       setMessages(prev => {
         if (data.message.isLoading) {
@@ -114,6 +102,7 @@ function App() {
   }, [socket, currentSessionId]);
 
   const createNewSession = () => {
+    console.log('Creating new session, currentSessionId:', currentSessionId, historySessions);
     if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {
       setHistorySessions(prev => [{ id: currentSessionId, messages, firstMessage: messages[0]?.text, title: messages[0]?.text }, ...prev]);
     }
@@ -160,15 +149,19 @@ function App() {
     <div className={`h-screen flex w-full ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       {/* Left Sidebar */}
       <Sidebar
-        historySessions={historySessions}
-        onSessionSelect={handleSessionSelect}
         onCreateSession={createNewSession}
         theme={theme}
         onThemeChange={handleThemeChange}
-        activeSessionId={currentSessionId}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebar}
-      />
+      >
+        <HistoryList
+          historySessions={historySessions}
+          activeSessionId={currentSessionId}
+          onSessionSelect={handleSessionSelect}
+          theme={theme}
+        />
+      </Sidebar>
 
       {/* Right Content Area */}
       <div className="flex-1 flex flex-col">

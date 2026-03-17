@@ -2,19 +2,11 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // 支持GitHub Flavored Markdown
 import { chatIdentify } from '../lib/utils';
-
-
-interface Message {
-  id: string;
-  text: string;
-  role: 'user' | 'robot' | 'system' | 'assistant';
-  isLoading?: boolean;
-  messageId?: string; // deprecated, use id
-}
+import { IMessage, Theme } from '../type';
 
 interface ChatWindowProps {
-  messages: Message[];
-  theme?: 'light' | 'dark';
+  messages: IMessage[];
+  theme?: Theme;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) => {

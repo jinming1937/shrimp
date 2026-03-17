@@ -1,8 +1,9 @@
 import React from 'react';
+import { Theme } from '../type';
 
 interface ModelHeaderProps {
   modelName?: string;
-  theme?: 'light' | 'dark';
+  theme?: Theme;
   messageStatus?: boolean; // 是否在线
   onToggleCollapse?: () => void;
 }

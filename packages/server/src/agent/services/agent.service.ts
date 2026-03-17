@@ -132,7 +132,7 @@ export class AgentService {
 
       return { output_text: finalAnswer };
     } catch (error) {
-      return { output_text: error }
+      return { output_text: JSON.stringify(error.message) || 'Agent 执行失败' }
     }
   }
 
