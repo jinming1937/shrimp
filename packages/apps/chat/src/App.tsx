@@ -48,7 +48,7 @@ function App() {
     // Fetch history sessions on load
     fetch('/api/sessions/list')
       .then(res => res.json())
-      .then(sessions => {
+      .then((sessions = []) => {
         const mapped = sessions.map((s: any) => ({ ...s, messages: []}));
         setHistorySessions(mapped);
       })
