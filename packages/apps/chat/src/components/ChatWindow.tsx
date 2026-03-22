@@ -3,15 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'; // 支持GitHub Flavored Markdown
 import { chatIdentify } from '../lib/utils';
 import axios from 'axios';
-
-
-interface Message {
-  id: string;
-  text: string;
-  role: 'user' | 'robot' | 'system' | 'assistant';
-  isLoading?: boolean;
-  messageId?: string; // deprecated, use id
-}
+import { Message } from '../types';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -136,6 +128,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
                 chatIdentify(msg.role) && !msg.isLoading ? (
                   <input type="button" value="say" className="text-xs text-gray-500 mt-1 cursor-pointer" onClick={() => say(msg.text, msg.id)} />
                 ): null
+              }
+              {
+                msg.role === 'user' && msg.ext?.type === 'image_url' && msg.ext?.url ?
+                (
+                  <div className="flex w-28 h-28">
+                    <img className="w-28 h-28" src={msg.ext.url} alt='图片已经过期' />
+                  </div>
+                ) : null
               }
             </div>
             {msg.role === 'user' && (

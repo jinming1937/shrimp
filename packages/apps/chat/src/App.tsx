@@ -6,11 +6,11 @@ import ChatWindow from './components/ChatWindow';
 import InputSend from './components/InputSend';
 import { isMobile } from './lib/utils';
 import { HistoryList } from './components/HistoryList';
-import { Message } from './types';
+import { Message, ISendExt } from './types';
 import { useStore } from './store/app';
 
 function App() {
-  const { activeMsgId: currentSessionId, setActiveMsgId, messages, setMessages } = useStore();
+  const { activeMsgId: currentSessionId, setActiveMsgId, messages, setMessages, addMessages } = useStore();
 
   const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
@@ -51,7 +51,7 @@ function App() {
       console.log('Looking for loading message with id:', data);
       if (data.message.isLoading) {
         // If it's a loading message, append it
-        return setMessages([...messages,data.message]);
+        return addMessages([data.message]);
       } else {
         const currentMsgId = data.message.id;
         const matchLoadingIndex = messages.findIndex(
@@ -69,7 +69,7 @@ function App() {
               msg.id === data.message.id ? data.message : msg
             ));
           }
-          return setMessages([...messages, data.message]);
+          return addMessages([data.message]);
         }
       }
     };
@@ -96,7 +96,7 @@ function App() {
     setActiveMsgId(null);
   };
 
-  const sendMessage = (input: string) => {
+  const sendMessage = (input: string, ext: ISendExt) => {
     const newId = currentSessionId || Date.now().toString();
     if (!currentSessionId) {
       setActiveMsgId(newId);
@@ -106,10 +106,16 @@ function App() {
     } else {
       socket.emit('joinSession', currentSessionId);
     }
-    if (input.trim() && socket) {
-      setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user' }]);
-      console.log('Sending message:', input);
-      socket.emit('sendMessage', { message: input, sessionId: newId, role: 'user' });
+    if ((input.trim() || ext.url) && socket) {
+      const messageData = {
+        message: input,
+        sessionId: newId,
+        role: 'user',
+        ext: ext
+      };
+      setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
+      console.log('Sending message:', messageData);
+      socket.emit('sendMessage', messageData);
     }
   };
 
@@ -117,7 +123,6 @@ function App() {
     <div className={`h-screen flex w-full ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       {/* Left Sidebar */}
       <Sidebar
-        
         onCreateSession={createNewSession}
         theme={theme}
         onThemeChange={handleThemeChange}

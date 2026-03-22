@@ -10,8 +10,10 @@ export class SessionService {
       if (!fs.existsSync(sessionsDir)) {
         return [];
       }
-      const files = fs.readdirSync(sessionsDir).filter(file => file.endsWith('.json'));
-      const sessions = files.map(file => {
+      const files = fs
+        .readdirSync(sessionsDir)
+        .filter((file) => file.endsWith('.json'));
+      const sessions = files.map((file) => {
         const sessionId = path.parse(file).name;
         try {
           const filePath = path.join(sessionsDir, file);

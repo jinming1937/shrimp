@@ -15,10 +15,8 @@ export class AgentController {
   //   };
   // }
 
-  
-
   @Post('/text2voice')
-  text2Voice(@Body() params: {text: string}) {
+  text2Voice(@Body() params: { text: string }) {
     return this.agentService.text2Voice(params.text);
   }
 

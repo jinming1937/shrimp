@@ -7,6 +7,7 @@ interface AppStoreProps {
 
     setActiveMsgId: (id: string | null) => void;
     setMessages: (msg: Message[]) => void;
+    addMessages: (msg: Message[]) => void;
 }
 
 export const useStore = create<AppStoreProps>((set) => ({
@@ -15,4 +16,5 @@ export const useStore = create<AppStoreProps>((set) => ({
 
     messages: [],
     setMessages: (newMsg: Message[]) => set((state) => ({ messages: state.messages = newMsg })),
+    addMessages: (msg: Message[]) => set((state) => ({messages: [...state.messages, ...msg]}))
 }));

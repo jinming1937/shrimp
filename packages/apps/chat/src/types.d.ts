@@ -5,6 +5,7 @@ export interface Message {
   role: 'user' | 'system' | 'assistant' | 'robot';
   isLoading?: boolean;
   messageId?: string; // deprecated, use id
+  ext?: ISendExt;
 }
 
 export interface Session {
@@ -13,3 +14,5 @@ export interface Session {
   messages: Message[];
   firstMessage?: string;
 }
+
+export type ISendExt = { type: 'image_url' | 'video_url' | 'text', url?: string }
