@@ -6,7 +6,7 @@ function IsString() {
     if (typeof metadata !== 'string') {
       throw new Error('Property must be a string');
     }
-  }
+  };
 }
 
 function IsNotEmpty() {
@@ -17,7 +17,7 @@ function IsNotEmpty() {
     }
 
     return value;
-  }
+  };
 }
 // 校验前端传入的参数（防止非法输入）
 export class AgentRequestDto {

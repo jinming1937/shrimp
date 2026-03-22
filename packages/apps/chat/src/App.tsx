@@ -5,25 +5,13 @@ import ModelHeader from './components/ModelHeader';
 import ChatWindow from './components/ChatWindow';
 import InputSend from './components/InputSend';
 import { isMobile } from './lib/utils';
-
-interface Message {
-  id: string;
-  text: string;
-  role: 'user' | 'system' | 'assistant' | 'robot';
-  isLoading?: boolean;
-  messageId?: string; // deprecated, use id
-}
-
-interface Session {
-  id: string;
-  title: string;
-  messages: Message[];
-}
+import { HistoryList } from './components/HistoryList';
+import { Message, ISendExt } from './types';
+import { useStore } from './store/app';
 
 function App() {
-  const [historySessions, setHistorySessions] = useState<Session[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { activeMsgId: currentSessionId, setActiveMsgId, messages, setMessages, addMessages } = useStore();
+
   const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(isMobile());
@@ -45,17 +33,6 @@ function App() {
   };
 
   useEffect(() => {
-    // Fetch history sessions on load
-    fetch('/api/sessions/list')
-      .then(res => res.json())
-      .then((sessions = []) => {
-        const mapped = sessions.map((s: any) => ({ ...s, messages: []}));
-        setHistorySessions(mapped);
-      })
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
     const newSocket = io('http://localhost:3000');
     setSocket(newSocket);
     return () => {
@@ -72,31 +49,29 @@ function App() {
 
     const handleMessage = (data: { message: Message; sessionId: string }) => {
       console.log('Looking for loading message with id:', data);
-      setMessages(prev => {
-        if (data.message.isLoading) {
-          // If it's a loading message, append it
-          return [...prev, data.message];
+      if (data.message.isLoading) {
+        // If it's a loading message, append it
+        return addMessages([data.message]);
+      } else {
+        const currentMsgId = data.message.id;
+        const matchLoadingIndex = messages.findIndex(
+          msg => msg.isLoading && msg.role === 'system' && msg.id === currentMsgId
+        );
+        if (matchLoadingIndex !== -1) {
+          // replace the placeholder loading message
+          return setMessages(messages.map((msg, index) =>
+            index === matchLoadingIndex ? data.message : msg
+          ));
         } else {
-          const currentMsgId = data.message.id;
-          const matchLoadingIndex = prev.findIndex(
-            msg => msg.isLoading && msg.role === 'system' && msg.id === currentMsgId
-          );
-          if (matchLoadingIndex !== -1) {
-            // replace the placeholder loading message
-            return prev.map((msg, index) =>
-              index === matchLoadingIndex ? data.message : msg
-            );
-          } else {
-            const exists = prev.some(msg => msg.id === data.message.id);
-            if (exists) {
-              return prev.map(msg =>
-                msg.id === data.message.id ? data.message : msg
-              );
-            }
-            return [...prev, data.message];
+          const exists = messages.some(msg => msg.id === data.message.id);
+          if (exists) {
+            return setMessages(messages.map(msg =>
+              msg.id === data.message.id ? data.message : msg
+            ));
           }
+          return addMessages([data.message]);
         }
-      });
+      }
     };
 
     const handleJoined = () => {
@@ -114,45 +89,33 @@ function App() {
   }, [socket, currentSessionId]);
 
   const createNewSession = () => {
-    if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {
-      setHistorySessions(prev => [{ id: currentSessionId, messages, firstMessage: messages[0]?.text, title: messages[0]?.text }, ...prev]);
-    }
+    // if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {
+      // setHistorySessions(prev => [{ id: currentSessionId, messages, firstMessage: messages[0]?.text, title: messages[0]?.text }, ...prev]);
+    // }
     setMessages([]);
-    setCurrentSessionId(null);
+    setActiveMsgId(null);
   };
 
-  const handleSessionSelect = (sessionId: string) => {
-    setCurrentSessionId(sessionId);
-    // fetch messages for this session via HTTP
-    fetch(`/api/sessions/${sessionId}/messages`)
-      .then(res => res.json())
-      .then(messages => {
-        setHistorySessions(prev =>
-          prev.map(session =>
-            session.id === sessionId
-              ? { ...session, messages }
-              : session
-          )
-        );
-        setMessages(messages);
-      })
-      .catch(console.error);
-  };
-
-  const sendMessage = (input: string) => {
+  const sendMessage = (input: string, ext: ISendExt) => {
     const newId = currentSessionId || Date.now().toString();
     if (!currentSessionId) {
-      setCurrentSessionId(newId);
+      setActiveMsgId(newId);
       if (socket) {
         socket.emit('joinSession', newId);
       }
     } else {
       socket.emit('joinSession', currentSessionId);
     }
-    if (input.trim() && socket) {
-      setMessages(prev => [...prev, { id: `${Date.now()}`, text: input, role: 'user' }]);
-      console.log('Sending message:', input);
-      socket.emit('sendMessage', { message: input, sessionId: newId, role: 'user' });
+    if ((input.trim() || ext.url) && socket) {
+      const messageData = {
+        message: input,
+        sessionId: newId,
+        role: 'user',
+        ext: ext
+      };
+      setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
+      console.log('Sending message:', messageData);
+      socket.emit('sendMessage', messageData);
     }
   };
 
@@ -160,15 +123,17 @@ function App() {
     <div className={`h-screen flex w-full ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       {/* Left Sidebar */}
       <Sidebar
-        historySessions={historySessions}
-        onSessionSelect={handleSessionSelect}
         onCreateSession={createNewSession}
         theme={theme}
         onThemeChange={handleThemeChange}
-        activeSessionId={currentSessionId}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebar}
-      />
+      >
+        <HistoryList
+          theme={theme}
+          activeSessionId={currentSessionId}
+        />
+      </Sidebar>
 
       {/* Right Content Area */}
       <div className="flex-1 flex flex-col">

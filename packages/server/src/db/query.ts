@@ -1,5 +1,5 @@
 import mysql2 from 'mysql2/promise';
-import {MYSQL_CONFIG} from './mysql_config'
+import { MYSQL_CONFIG } from './mysql_config';
 
 const pool2 = mysql2.createPool({
   user: MYSQL_CONFIG.user,
@@ -19,13 +19,16 @@ const pool2 = mysql2.createPool({
 const query = async <T, U>(sql: string, values?: U): Promise<T> => {
   try {
     // For pool initialization, see above
-    const [rows, fields] = await pool2.execute(sql, Object.values(values || {}));
+    const [rows, fields] = await pool2.execute(
+      sql,
+      Object.values(values || {}),
+    );
     // Connection is automatically released when query resolves
     return rows as unknown as T;
   } catch (err) {
     console.log(err);
     throw err;
   }
-}
+};
 
-export default query
+export default query;
