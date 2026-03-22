@@ -55,9 +55,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
   const say = async (text: string, messageId: string) => {
     const catchURL = await getCatchSpeech(messageId);
     if (catchURL) {
-      // "http://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/1d/59/20260320/9f107364/8cfb9b02-b379-4fdf-aa11-8bf348622b48.wav?Expires=1774066493&OSSAccessKeyId=LTAI5tPxpiCM2hjmWrFXrym1&Signature=VllJxglzEnJvif93UiDHZogG2zk%3D"
       setSrc(catchURL);
-      setCatchSpeech(messageId, catchURL, 3600 * 24); // 缓存1小时
         // setSrc(`data:audio/mpeg;base64,${audioData}`);
         // 等待音频加载后再播放
         if (audioRef.current) {
@@ -74,7 +72,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
     // https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
     try {
       const response = await axios.post(
-        '/api/sessions/say',
+        '/api/agent/text2voice',
         {
           text,
         }
@@ -89,6 +87,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
         // setSrc(`data:audio/mpeg;base64,${audioData}`);
         // 等待音频加载后再播放
         if (audioRef.current) {
+          setCatchSpeech(messageId, audioData, 3600 * 24); // 缓存1小时
           audioRef.current.load();
           audioRef.current.oncanplay = () => {
             audioRef.current?.play().catch(err => console.error('Audio play failed:', err));

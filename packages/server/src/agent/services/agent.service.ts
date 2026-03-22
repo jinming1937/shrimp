@@ -197,4 +197,12 @@ export class AgentService {
       throw new Error(`工具调用失败：${toolName} → ${error.message}`);
     }
   }
+
+  async text2Voice(text: string) {
+    return this.llmService.callVoiceAPI(text);
+  }
+
+  async img2SVG() {
+    return this.llmService.callImg2SVGLLM();
+  }
 }

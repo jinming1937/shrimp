@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { AgentService } from './services/agent.service';
 import { AgentRequestDto } from './dto/agent-request.dto';
 
@@ -14,4 +14,16 @@ export class AgentController {
   //     data: result,
   //   };
   // }
+
+  
+
+  @Post('/text2voice')
+  text2Voice(@Body() params: {text: string}) {
+    return this.agentService.text2Voice(params.text);
+  }
+
+  @Post('img2svg')
+  img2SVG(@Body() params) {
+    return this.agentService.img2SVG();
+  }
 }
