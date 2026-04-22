@@ -48,7 +48,7 @@ function App() {
     }
 
     const handleMessage = (data: { message: Message; sessionId: string }) => {
-      console.log('Looking for loading message with id:', data);
+      // console.log('Looking for loading message with id:', data);
       if (data.message.isLoading) {
         // If it's a loading message, append it
         return addMessages([data.message]);
@@ -57,6 +57,7 @@ function App() {
         const matchLoadingIndex = messages.findIndex(
           msg => msg.isLoading && msg.id === currentMsgId
         );
+        console.log('Matching loading index:', data, currentMsgId, messages);
         if (matchLoadingIndex !== -1) {
           // replace the placeholder loading message
           return setMessages(messages.map((msg, index) =>
@@ -114,7 +115,7 @@ function App() {
         ext: ext
       };
       setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
-      console.log('Sending message:', messageData);
+      // console.log('Sending message:', messageData);
       socket.emit('sendMessage', messageData);
     }
   };

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { LlmService } from './llm.service';
+import { IImageContent, ITextContent, LlmService } from './llm.service';
 import { calculator } from '../tools/calculator.tool';
 import { getTime } from '../tools/time.tool';
 import { promises as fs, readFileSync } from 'fs';
@@ -14,6 +14,18 @@ const encodeImage = (imagePath) => {
     return imageFile.toString('base64');
   };
 
+  const genImgContent = (data, imgDir) => {
+    const content: ChatCompletionContentPartImage[] = [];
+          const imgName = data.ext.url?.split('/').pop() || '';
+          console.log('imgName', imgName);
+          const imgPath = path.join(imgDir, imgName);
+          content.push({
+            type: data.ext.type,
+            image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
+          });
+
+          return content;
+  }
 
 @Injectable()
 export class AgentService {
@@ -153,16 +165,17 @@ export class AgentService {
           if (msg.ext && msg.ext.type !== 'text' && msg.ext.url) {
             model = 'qwen-vl-plus';
             hasImageQuestion = true;
-            const content: ChatCompletionContentPartImage[] = [];
-            const imgName = msg.ext.url?.split('/').pop() || '';
-            const imgPath = path.join(this.imgDir, imgName);
-            content.push({
-              type: msg.ext.type,
-              image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
-            });
+            // const content: ChatCompletionContentPartImage[] = [];
+            // const imgName = msg.ext.url?.split('/').pop() || '';
+            // console.log('imgName', imgName);
+            // const imgPath = path.join(this.imgDir, imgName);
+            // content.push({
+            //   type: msg.ext.type,
+            //   image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
+            // });
             chatContext.push({
               role: msg.role as 'user',
-              content,
+              content: genImgContent(msg, this.imgDir),
             });
           } else {
             chatContext.push({
@@ -175,16 +188,9 @@ export class AgentService {
         if (data.ext && data.ext.type !== 'text' && data.ext.url) {
           model = 'qwen-vl-plus';
           hasImageQuestion = true;
-          const content: ChatCompletionContentPartImage[] = [];
-          const imgName = data.ext.url?.split('/').pop() || '';
-          const imgPath = path.join(this.imgDir, imgName);
-          content.push({
-            type: data.ext.type,
-            image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
-          });
           chatContext.push({
             role: data.role as 'user',
-            content,
+            content: genImgContent(data, this.imgDir),
           });
         } else {
           chatContext.push({
@@ -199,12 +205,11 @@ export class AgentService {
       if (hasImageQuestion || model === 'qwen-vl-plus') {
         console.log('Using image-capable model for question with image content');
         return await this.callImageGenLLM(chatContext);
+      } else {
+        const finalAnswer = await this.llmService.callOpenAI(chatContext, model);
+        console.log('Agent final answer:', finalAnswer.substring(0, 100) + '...'); // log the beginning of the final answer for debugging
+        return { output_text: finalAnswer };
       }
-
-      const finalAnswer = await this.llmService.callOpenAI(chatContext, model);
-      console.log('Agent final answer:', finalAnswer.substring(0, 100) + '...'); // log the beginning of the final answer for debugging
-
-      return { output_text: finalAnswer };
     } catch (error: unknown) {
       return { output_text: (error as any).message || 'Agent 执行出错' };
     }
@@ -213,23 +218,26 @@ export class AgentService {
   async callImageGenLLM(contents) {
     try {
       const messages = contents.map((item) => {
+        const content: Array<ITextContent | IImageContent> = [];
+        if (typeof item.content === 'string') {
+          content.push({ text: item.content as string });
+        } else if (Array.isArray(item.content)) {
+          item.content.forEach((part) => {
+            if (part.type === 'text') {
+              content.push({ text: part.text });
+            } else if (part.type === 'image_url') {
+              content.push({
+                image: 'https://img1.baidu.com/it/u=3452406599,3508760911&fm=253&app=138&f=JPEG?w=800&h=1422', // part.image_url.url
+              });
+            }
+          });
+        }
         return {
           role: item.role,
-          content: typeof item.content === 'string' ? item.content : item.content.map((part) => {
-            if (part.type === 'text') {
-              return {
-                text: part.text,
-              };
-            } else if (part.type === 'image_url') {
-              return {
-                image: part.image_url.url,
-              }
-            }
-            return '';
-          }).join(''),
+          content: content,
         }
       })
-
+      console.log('Image Gen LLM messages:', JSON.stringify(messages));
       const response = await this.llmService.callImageGenLLM(messages);
       console.log('Image Gen LLM response:', response);
       return { output_media: response };

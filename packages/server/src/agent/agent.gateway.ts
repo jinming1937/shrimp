@@ -58,7 +58,7 @@ export class AgentGateway {
       // save the bot response as well
       let botText = '';
       let ext: ISendExt | undefined;
-      if (result.output_media) {
+      if ('output_media' in result) {
         // 处理媒体，假设 output_media 是图片URL
         const mediaUrl = result.output_media;
         const filename = `generated-${Date.now()}.png`;

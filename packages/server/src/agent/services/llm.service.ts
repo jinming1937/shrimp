@@ -138,6 +138,7 @@ export class LlmService {
    */
   async callImageGenLLM(messages: IAgentGenImageMessage) {
     const model = 'qwen-image-2.0-pro';
+    // https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
     const imageBeiJing = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
     try {
       const response = await axios.post(
@@ -149,7 +150,7 @@ export class LlmService {
           },
           "parameters": {
               "n": 1,
-              "negative_prompt": " ",
+              "negative_prompt": "",
               "prompt_extend": true,
               "watermark": false,
               "size": "1024*1024"
