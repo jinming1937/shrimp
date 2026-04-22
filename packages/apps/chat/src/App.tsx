@@ -33,7 +33,7 @@ function App() {
   };
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3000');
+    const newSocket = io('http://jm.chat.ai:3000');
     setSocket(newSocket);
     return () => {
       newSocket.disconnect();
@@ -55,7 +55,7 @@ function App() {
       } else {
         const currentMsgId = data.message.id;
         const matchLoadingIndex = messages.findIndex(
-          msg => msg.isLoading && msg.role === 'system' && msg.id === currentMsgId
+          msg => msg.isLoading && msg.id === currentMsgId
         );
         if (matchLoadingIndex !== -1) {
           // replace the placeholder loading message

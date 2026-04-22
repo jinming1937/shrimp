@@ -130,10 +130,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
                 ): null
               }
               {
-                msg.role === 'user' && msg.ext?.type === 'image_url' && msg.ext?.url ?
+                msg.ext?.type === 'image_url' && msg.ext?.url ?
                 (
-                  <div className="flex w-28 h-28">
-                    <img className="w-28 h-28" src={msg.ext.url} alt='图片已经过期' />
+                  <div className="flex w-80 h-80">
+                    <img className="w-full h-full object-contain" src={msg.ext.url} alt='图片已经过期' />
                   </div>
                 ) : null
               }

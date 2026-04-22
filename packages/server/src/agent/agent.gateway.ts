@@ -56,18 +56,29 @@ export class AgentGateway {
       const result = await this.agentService.onceAgent(data);
       // console.log('Agent result:', result);
       // save the bot response as well
-      const botText = result.output_text || '';
-      // TODO: img
+      let botText = '';
+      let ext: ISendExt | undefined;
+      if (result.output_media) {
+        // 处理媒体，假设 output_media 是图片URL
+        const mediaUrl = result.output_media;
+        const filename = `generated-${Date.now()}.png`;
+        await this.agentService.downloadImage(mediaUrl, filename);
+        ext = { type: 'image_url', url: `/api/img/${filename}` };
+        botText = '';
+      } else {
+        botText = result.output_text || '';
+      }
       await this.agentService.saveMessage(data.sessionId, {
         id: botMessageId,
         text: botText,
-        role: 'system',
+        role: 'assistant',
+        ext,
       });
 
       console.log(botText.substring(0, 10) + '...'); // log the beginning of the response for debugging
       // Broadcast the response back to the room, replacing the loading
       this.server.to(data.sessionId).emit('message', {
-        message: { id: botMessageId, text: botText, role: 'assistant' },
+        message: { id: botMessageId, text: botText, role: 'assistant', ext },
         sessionId: data.sessionId,
         clientId: client.id,
       });

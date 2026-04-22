@@ -3,6 +3,19 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import { ChatCompletionMessageParam } from 'openai/resources';
 
+export interface ITextContent {
+  text: string;
+}
+
+export interface IImageContent {
+  image: string; // 图片 URL
+}
+
+export interface IAgentGenImageMessage {
+  role: 'user' | 'assistant';
+  content: Array<ITextContent | IImageContent>;
+}
+
 const RADIO_API_CONFIG = {
   url: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
   model: 'qwen3-tts-instruct-flash',
@@ -18,34 +31,32 @@ export class LlmService {
   constructor() {
     // 读取 OPENAI_API_KEY 环境变量
     // const openaiApiKey = process.env.OPENAI_API_KEY;
-    const qwenApiKey = process.env.QWEN_API_KEY;
+    const apiKey = process.env.QWEN_API_KEY;
 
-    // 验证是否读取成功
-    // if (!openaiApiKey) {
-    //   console.error('❌ 未找到 OPENAI_API_KEY 环境变量，请检查配置！');
-    //   process.exit(1); // 终止程序运行
-    // }
-
-    if (!qwenApiKey) {
+    if (!apiKey) {
       console.error('❌ 未找到 QWEN_API_KEY 环境变量，请检查配置！');
       process.exit(1); // 终止程序运行
     }
 
-    // console.log('✅ 成功读取 API Key：', openaiApiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
-    console.log('✅ 成功读取 API Key：', qwenApiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
-
-    // const openai = new OpenAI({
-    //   apiKey: process.env.OPENAI_API_KEY,
-    // });
+    console.log('✅ 成功读取 API Key：', apiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
 
     this.baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-    this.apiKey = qwenApiKey;
+    this.apiKey = apiKey;
     this.openai = new OpenAI({
       apiKey: this.apiKey,
       baseURL: this.baseUrl,
     });
+    // const openai = new OpenAI({
+    //   apiKey: process.env.OPENAI_API_KEY,
+    // });
   }
 
+  /**
+   * 通用的 OpenAI 调用接口，支持超时设置和错误处理
+   * @param messages 消息历史
+   * @param model 模型
+   * @returns 消息
+   */
   async callOpenAI(
     messages: Array<ChatCompletionMessageParam>,
     model: string,
@@ -68,8 +79,8 @@ export class LlmService {
       ])) as any;
       console.log('✅ OpenAI API 调用成功：', result);
       return result.choices[0].message.content;
-    } catch (error) {
-      this.logger.error(`LLM 调用失败: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`LLM 调用失败: ${(error as any).message}`);
       throw new Error('大模型服务暂时不可用，日志已经记录'); // 返回空对象，避免程序崩溃
     }
   }
@@ -121,6 +132,70 @@ export class LlmService {
     }
   }
 
+  /**
+   * 调用图像生成
+   * https://bailian.console.aliyun.com/cn-beijing?spm=5176.29597918.J_C-NDPSQ8SFKWB4aef8i6I.1.2888133cJA91xG&tab=api#/api/?type=model&url=2976416
+   */
+  async callImageGenLLM(messages: IAgentGenImageMessage) {
+    const model = 'qwen-image-2.0-pro';
+    const imageBeiJing = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+    try {
+      const response = await axios.post(
+        imageBeiJing,
+        {
+          model,
+          input: {
+            messages,
+          },
+          "parameters": {
+              "n": 1,
+              "negative_prompt": " ",
+              "prompt_extend": true,
+              "watermark": false,
+              "size": "1024*1024"
+          },
+          temperature: 0.1,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+      /***
+{
+    "output": {
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "content": [
+                        {
+                            "image": "https://dashscope-result-sz.oss-cn-shenzhen.aliyuncs.com/xxx.png?Expires=xxx"
+                        }
+                    ],
+                    "role": "assistant"
+                }
+            }
+        ]
+    },
+    "usage": {
+        "height": 2048,
+        "image_count": 1,
+        "width": 2048
+    },
+    "request_id": "571ae02f-5c9d-436c-83c2-f221e6df0xxx"
+}
+      */
+      console.log('Image Gen API response received');
+      return response.data.output.choices[0].message.content;
+    } catch (error) {
+      this.logger.error(`图像生成调用失败: ${(error as any).message}`);
+      throw new Error('图像生成服务暂时不可用，日志已经记录');
+    }
+  }
+
   async callImg2SVGLLM() {
     // qwen-vl-plus
     const model = 'qwen-vl-plus';
@@ -153,8 +228,8 @@ export class LlmService {
         },
       );
       return response.data.choices[0].message.content;
-    } catch (error) {
-      this.logger.error(`LLM 调用失败: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`LLM 调用失败: ${(error as any).message}`);
       throw new Error('大模型服务暂时不可用');
     }
   }

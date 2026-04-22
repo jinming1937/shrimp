@@ -51,10 +51,12 @@ export class FileUploadService {
         // 允许的 MIME 类型
         const allowedMimeTypes = [
           'image/jpeg',
+          'image/jpg',
           'image/png',
           'image/gif',
-          'application/pdf',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'image/webp',
+          // 'application/pdf',
+          // 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ];
 
         if (allowedMimeTypes.includes(file.mimetype)) {
@@ -79,6 +81,6 @@ export class FileUploadService {
   // 获取文件访问路径（可选，用于返回给前端）
   getFileUrl(filename: string): string {
     // 替换为你的实际域名/端口
-    return `http://localhost:5173/api/img/${filename}`;
+    return `/api/img/${filename}`;
   }
 }

@@ -20,7 +20,7 @@ export class AgentController {
     return this.agentService.text2Voice(params.text);
   }
 
-  @Post('img2svg')
+  @Post('/img2svg')
   img2SVG(@Body() params) {
     return this.agentService.img2SVG();
   }

@@ -21,7 +21,7 @@ const UPLOAD_DIR = path.resolve(__dirname, '../../../../.chat/imgs');
 const MimeType: Record<string, string> = {
   png: 'image/png',
   gif: 'image/gif',
-  jpg: 'image/jpeg',
+  jpg: 'image/jpg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
 };
