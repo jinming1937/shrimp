@@ -117,9 +117,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
                 ? 'bg-gray-700'
                 : 'bg-white'
             }`}>
-              <div className={`prose prose-sm max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
+              <div className={`markdown-content prose prose-sm ${theme === 'dark' ? 'prose-invert' : ''}`}>
                 {chatIdentify(msg.role) ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.isLoading ? 'Loading...' : msg.text}</ReactMarkdown>
+                  <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}>
+                    {msg.isLoading ? 'Loading...' : msg.text}
+                  </ReactMarkdown>
                 ) : (
                   msg.isLoading ? 'Loading...' : msg.text
                 )}

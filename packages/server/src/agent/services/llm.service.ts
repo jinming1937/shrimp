@@ -12,7 +12,7 @@ export interface IImageContent {
 }
 
 export interface IAgentGenImageMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: Array<ITextContent | IImageContent>;
 }
 
@@ -61,6 +61,8 @@ export class LlmService {
     messages: Array<ChatCompletionMessageParam>,
     model: string,
   ): Promise<string> {
+    console.log('Calling OpenAI with model:', model);
+    console.log('Messages:', messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content.slice(0, 10) : '非文本内容' })));
     try {
       // set a timeout for the OpenAI call (e.g., 30 seconds)
       const timeoutPromise = new Promise((_, reject) =>
@@ -136,26 +138,61 @@ export class LlmService {
    * 调用图像生成
    * https://bailian.console.aliyun.com/cn-beijing?spm=5176.29597918.J_C-NDPSQ8SFKWB4aef8i6I.1.2888133cJA91xG&tab=api#/api/?type=model&url=2976416
    */
-  async callImageGenLLM(messages: IAgentGenImageMessage) {
-    const model = 'qwen-image-2.0-pro';
+  async callImageGenLLM(messages: IAgentGenImageMessage[]) {
     // https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
     const imageBeiJing = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
     try {
+      /**
+       * 
+       curl --location 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation' \
+--header 'Content-Type: application/json' \
+--header "Authorization: Bearer $QWEN_API_KEY" \
+--data '{
+    "model": "qwen-image-2.0-pro",
+    "input": {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "image": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260310/rdsgaa/image+%2815%29.png"
+                    },
+                    {
+                        "image": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260310/qokhtl/image+%2816%29.png"
+                    },
+                    {
+                        "text": "使用图一的城市照片作为底图。请勿更改照片中的真实建筑、街道、车辆或人物。保持照片的真实性。三个图二中的卡通形象在建筑物周围，一个趴在建筑物上方，一个从建筑物的右边探出头来，一个坐在建筑物前的空地上。该形象应采用扁平化的图形风格绘制，轮廓清晰，类似于壁画或海报插图。"
+                    }
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "n": 1,
+        "negative_prompt": " ",
+        "prompt_extend": true,
+        "watermark": false,
+        "size": "1024*1024"
+    }
+}'
+       */
+
       const response = await axios.post(
         imageBeiJing,
         {
-          model,
+          model: 'qwen-image-2.0-pro',
           input: {
-            messages,
+            messages: [
+              ...messages
+            ],
           },
           "parameters": {
               "n": 1,
-              "negative_prompt": "",
+              "negative_prompt": " ",
               "prompt_extend": true,
               "watermark": false,
               "size": "1024*1024"
           },
-          temperature: 0.1,
         },
         {
           headers: {

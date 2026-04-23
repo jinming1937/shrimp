@@ -18,7 +18,7 @@ export class AgentGateway {
   constructor(private readonly agentService: AgentService) {}
 
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
@@ -53,16 +53,20 @@ export class AgentGateway {
 
     try {
       // const result = await this.agentService.runAgentByAct(data.message);
-      const result = await this.agentService.onceAgent(data);
+      const result = await this.agentService.onceAgent({
+        text: data.message,
+        role: data.role as 'user',
+        ext: data.ext,
+      }, data.sessionId);
       // console.log('Agent result:', result);
       // save the bot response as well
       let botText = '';
       let ext: ISendExt | undefined;
       if ('output_media' in result) {
-        // 处理媒体，假设 output_media 是图片URL
-        const mediaUrl = result.output_media;
+        // 处理媒体
+        const mediaList = result.output_media as Array<{ image: string }>;
         const filename = `generated-${Date.now()}.png`;
-        await this.agentService.downloadImage(mediaUrl, filename);
+        await this.agentService.downloadImage(mediaList[0].image, filename);
         ext = { type: 'image_url', url: `/api/img/${filename}` };
         botText = '';
       } else {
@@ -86,13 +90,13 @@ export class AgentGateway {
       console.error('Error during OpenAI call:', err);
       await this.agentService.saveMessage(data.sessionId, {
         id: botMessageId,
-        text: 'ai response timeout',
+        text: (err as any).message || 'Error occurred',
         role: 'system',
       });
       this.server.to(data.sessionId).emit('message', {
         message: {
           id: botMessageId,
-          text: 'ai response timeout',
+          text: (err as any).message || 'Error occurred',
           role: 'system',
         },
         sessionId: data.sessionId,

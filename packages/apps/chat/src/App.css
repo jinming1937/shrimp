@@ -9,3 +9,12 @@
     animation: logo-spin infinite 20s linear;
   }
 }
+
+.markdown-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 6px;
+}

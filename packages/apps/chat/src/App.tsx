@@ -57,7 +57,7 @@ function App() {
         const matchLoadingIndex = messages.findIndex(
           msg => msg.isLoading && msg.id === currentMsgId
         );
-        console.log('Matching loading index:', data, currentMsgId, messages);
+        // console.log('Matching loading index:', data, currentMsgId, messages);
         if (matchLoadingIndex !== -1) {
           // replace the placeholder loading message
           return setMessages(messages.map((msg, index) =>
@@ -87,7 +87,7 @@ function App() {
       socket.off('message', handleMessage);
       socket.off('joined', handleJoined);
     };
-  }, [socket, currentSessionId]);
+  }, [socket, currentSessionId, messages, addMessages]);
 
   const createNewSession = () => {
     // if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {

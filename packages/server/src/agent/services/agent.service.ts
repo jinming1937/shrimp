@@ -4,28 +4,51 @@ import { calculator } from '../tools/calculator.tool';
 import { getTime } from '../tools/time.tool';
 import { promises as fs, readFileSync } from 'fs';
 import * as path from 'path';
-import { ChatCompletionContentPartImage, ChatCompletionMessageParam } from 'openai/resources';
+import { ChatCompletionContentPart, ChatCompletionContentPartImage, ChatCompletionContentPartText, ChatCompletionMessageParam } from 'openai/resources';
 import { WeatherService } from './weather.service';
 import { ISendExt } from 'src/types';
 import axios from 'axios';
+
+// export interface IAgentGenImageMessage {
+//   context: Array<{ user: string; content: Array<{ text: string} | { image: string; }> }>
+// }
 
 const encodeImage = (imagePath) => {
     const imageFile = readFileSync(imagePath);
     return imageFile.toString('base64');
   };
 
-  const genImgContent = (data, imgDir) => {
-    const content: ChatCompletionContentPartImage[] = [];
-          const imgName = data.ext.url?.split('/').pop() || '';
-          console.log('imgName', imgName);
-          const imgPath = path.join(imgDir, imgName);
-          content.push({
-            type: data.ext.type,
-            image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
-          });
+const genImgContent = (data, imgDir) => {
+  const content: ChatCompletionContentPartImage[] = [];
+  const imgName = data.ext.url?.split('/').pop() || '';
+  console.log('imgName', imgName);
+  const imgPath = path.join(imgDir, imgName);
+  content.push({
+    type: data.ext.type,
+    image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
+  });
 
-          return content;
+  return content;
+}
+
+const sessionMsgToModelMsg: (msg: { text: string; role: string, ext: ISendExt }, imgDir: string) => ChatCompletionMessageParam = (msg, imgDir) => {
+  let content: Array<ChatCompletionContentPartImage | ChatCompletionContentPartText> = [];
+  if (msg.text) {
+    content.push({ text: msg.text, type: 'text' });
   }
+  if (msg.ext && msg.ext.type !== 'text' && msg.ext.url) {
+    content.push(...genImgContent(msg, imgDir));
+    return {
+      role: msg.role as 'user',
+      content,
+    };
+  } else {
+    return {
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: msg.text,
+    };
+  }
+}
 
 @Injectable()
 export class AgentService {
@@ -96,11 +119,7 @@ export class AgentService {
     };
   }
 
-  async runAgentByAct(data: {
-    message: string;
-    sessionId: string;
-    role: string;
-  }) {
+  async runAgentByAct(data: { text: string; role: string, ext: ISendExt }, sessionId: string) {
     const chatContext: ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -109,6 +128,7 @@ export class AgentService {
 - calculator: 计算（参数：a, b, op（add/sub/mul/div））
 - time: 获取当前时间（无参数）
 - weather: 获取天气（无参数）
+- gen_img: 根据文本生成图像（参数：prompt（prompt 类型：Array<{ user: string; content: Array<{ text: string} | { image: string; }> }>））
 工具调用格式必须是 JSON：{"tool":"工具名","params":{"key":value}}。
 最终输出结果的格式：
 先给最简短的结果输出（不需要任何多余的解释）；
@@ -116,7 +136,7 @@ export class AgentService {
 总结最终回答（如果调用了工具，必须结合工具返回的结果进行总结；如果没有调用工具，直接总结回答）。
 `,
       },
-      { role: 'user', content: data.message },
+      { role: 'user', content: data.text },
     ];
     try {
       const thinking = await this.llmService.callOpenAI(chatContext, 'qwen-plus');
@@ -151,59 +171,30 @@ export class AgentService {
     }
   }
 
-  async onceAgent(data: { message: string; sessionId: string; role: string, ext: ISendExt }) {
+  async onceAgent(data: { text: string; role: string, ext: ISendExt }, sessionId: string) {
     try {
-      // TODO: ReAct 循环：目前是单轮调用，后续可以改成循环调用，直到满足结束条件（如达到最大轮数，或 LLM 输出特定结束标志）
       const chatContext: ChatCompletionMessageParam[] = [];
-      const history = await this.readHistory(data.sessionId);
-      console.log('his', history.length);
+      const history = await this.readHistory(sessionId);
+      console.log('history', history.length);
       let model = 'qwen-plus';
       let hasImageQuestion = false;
       if (history.length > 0) {
-        // TODO: 剪枝:剪除过长的历史消息，避免上下文过大导致调用失败
-        history.slice(-5).forEach((msg) => {
-          if (msg.ext && msg.ext.type !== 'text' && msg.ext.url) {
-            model = 'qwen-vl-plus';
+        history.slice(-8).forEach((msg) => {
+          if (msg.ext && msg.ext.type === 'image_url' && msg.ext.url) {
             hasImageQuestion = true;
-            // const content: ChatCompletionContentPartImage[] = [];
-            // const imgName = msg.ext.url?.split('/').pop() || '';
-            // console.log('imgName', imgName);
-            // const imgPath = path.join(this.imgDir, imgName);
-            // content.push({
-            //   type: msg.ext.type,
-            //   image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
-            // });
-            chatContext.push({
-              role: msg.role as 'user',
-              content: genImgContent(msg, this.imgDir),
-            });
-          } else {
-            chatContext.push({
-              role: msg.role as 'user' | 'assistant' | 'system',
-              content: msg.text,
-            });
+            model = 'qwen-vl-plus';
           }
+          chatContext.push(sessionMsgToModelMsg(msg, this.imgDir));
         });
       } else {
-        if (data.ext && data.ext.type !== 'text' && data.ext.url) {
-          model = 'qwen-vl-plus';
-          hasImageQuestion = true;
-          chatContext.push({
-            role: data.role as 'user',
-            content: genImgContent(data, this.imgDir),
-          });
-        } else {
-          chatContext.push({
-            role: data.role as 'user',
-            content: data.message,
-          });
-          console.log('new session, content:', chatContext);
-        }
+        if (data.ext && data.ext.type === 'image_url' && data.ext.url) {
+            hasImageQuestion = true;
+            model = 'qwen-vl-plus';
+          }
+        chatContext.push(sessionMsgToModelMsg(data, this.imgDir));
       }
 
-      console.log('Final chat context for LLM:', model);
-      if (hasImageQuestion || model === 'qwen-vl-plus') {
-        console.log('Using image-capable model for question with image content');
+      if ((hasImageQuestion || model === 'qwen-vl-plus')) {
         return await this.callImageGenLLM(chatContext);
       } else {
         const finalAnswer = await this.llmService.callOpenAI(chatContext, model);
@@ -215,34 +206,34 @@ export class AgentService {
     }
   }
 
-  async callImageGenLLM(contents) {
+  async callImageGenLLM(contents: ChatCompletionMessageParam[]) {
     try {
       const messages = contents.map((item) => {
         const content: Array<ITextContent | IImageContent> = [];
         if (typeof item.content === 'string') {
           content.push({ text: item.content as string });
         } else if (Array.isArray(item.content)) {
-          item.content.forEach((part) => {
+          item.content.forEach((part: any) => {
             if (part.type === 'text') {
               content.push({ text: part.text });
             } else if (part.type === 'image_url') {
               content.push({
-                image: 'https://img1.baidu.com/it/u=3452406599,3508760911&fm=253&app=138&f=JPEG?w=800&h=1422', // part.image_url.url
+                image: part.image_url.url,
               });
             }
           });
         }
         return {
-          role: item.role,
+          role: item.role as 'user' | 'assistant' | 'system',
           content: content,
         }
       })
-      console.log('Image Gen LLM messages:', JSON.stringify(messages));
       const response = await this.llmService.callImageGenLLM(messages);
       console.log('Image Gen LLM response:', response);
       return { output_media: response };
     } catch (error) {
-      return { output_media: '图像生成失败，服务暂时不可用' };
+      throw new Error((error as any).message || '图像生成出错');
+      // return { output_media: (error as any).message || '图像生成出错' };
     }
   }
 
@@ -298,8 +289,8 @@ export class AgentService {
         return getTime();
       case 'weather':
         return await this.weatherService.getWeather();
-      // case 'gen_img':
-      //   return await this.llmService.callImageGenLLM([]);
+      case 'gen_img':
+        return await this.llmService.callImageGenLLM(params);
       default:
         return `未找到工具：${toolName}`;
     }
@@ -327,10 +318,15 @@ export class AgentService {
   }
 
   async downloadImage(url: string, filename: string) {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    const buffer = Buffer.from(response.data, 'binary');
-    const filePath = path.join(this.imgDir, filename);
-    await fs.writeFile(filePath, buffer);
-    return filePath;
+    try {
+      const response = await axios.get(url, { responseType: 'arraybuffer' });
+      const buffer = response.data; // response.data is already a Buffer in Node.js
+      const filePath = path.join(this.imgDir, filename);
+      await fs.writeFile(filePath, buffer);
+      return filePath;
+    } catch (error) {
+      console.error('Failed to download image:', error);
+      throw new Error('图片下载失败');
+    }
   }
 }
