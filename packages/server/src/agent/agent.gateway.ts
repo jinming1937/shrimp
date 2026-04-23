@@ -58,17 +58,26 @@ export class AgentGateway {
         role: data.role as 'user',
         ext: data.ext,
       }, data.sessionId);
-      // console.log('Agent result:', result);
-      // save the bot response as well
       let botText = '';
       let ext: ISendExt | undefined;
       if ('output_media' in result) {
-        // 处理媒体
-        const mediaList = result.output_media as Array<{ image: string }>;
-        const filename = `generated-${Date.now()}.png`;
-        await this.agentService.downloadImage(mediaList[0].image, filename);
-        ext = { type: 'image_url', url: `/api/img/${filename}` };
-        botText = '';
+        const mediaList = result.output_media as {
+          "content": 
+            Array<{
+              image?: string;
+              text?: string;
+            }>;
+          role: 'user' | 'assistant' | 'system';
+        };
+        const imageItem = mediaList.content.find((item) => item.image);
+        const textItem = mediaList.content.find((item) => item.text);
+
+        botText = textItem?.text || '';
+        if (imageItem?.image) {
+          const filename = `generated-${Date.now()}.png`;
+          await this.agentService.downloadImage(imageItem.image, filename);
+          ext = { type: 'image_url', url: `/api/img/${filename}` };
+        }
       } else {
         botText = result.output_text || '';
       }

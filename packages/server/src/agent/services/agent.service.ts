@@ -177,25 +177,45 @@ export class AgentService {
       const history = await this.readHistory(sessionId);
       console.log('history', history.length);
       let model = 'qwen-plus';
-      let hasImageQuestion = false;
+      if (history.find(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url)) {
+        model = 'qwen-vl-plus';
+      }
       if (history.length > 0) {
         history.slice(-8).forEach((msg) => {
-          if (msg.ext && msg.ext.type === 'image_url' && msg.ext.url) {
-            hasImageQuestion = true;
-            model = 'qwen-vl-plus';
-          }
           chatContext.push(sessionMsgToModelMsg(msg, this.imgDir));
         });
       } else {
-        if (data.ext && data.ext.type === 'image_url' && data.ext.url) {
-            hasImageQuestion = true;
-            model = 'qwen-vl-plus';
-          }
         chatContext.push(sessionMsgToModelMsg(data, this.imgDir));
       }
 
-      if ((hasImageQuestion || model === 'qwen-vl-plus')) {
-        return await this.callImageGenLLM(chatContext);
+      if (model === 'qwen-vl-plus') {
+        chatContext.unshift({
+          role: 'system',
+          content: `当前对话包含图片信息，请使用支持多模态的 qwen-vl-plus 模型进行回答。并判断用户意图是否为生成或修改图片，
+          如果是，需要调用 gen_img 工具进行图像生成，请严格返回工具调用的 JSON 格式指令，参数格式为：{"tool":"gen_img","params": [{ "role": "user", "content": [{ "text": "prompt" }, { "image": "url" }] }] }。
+          如果不是，直接给出回答即可。`,
+        });
+        const thinking = await this.llmService.callOpenAI(chatContext, model);
+        console.log('Agent thinking:', thinking.substring(0, 1000) + '...'); // log the beginning of the thought for debugging
+        let observation;
+        if (thinking.includes('"tool"')) {
+          try {
+            const toolCall = JSON.parse(thinking);
+            console.log('Tool call:', toolCall.params);
+            observation = await this.runToolWithRetry(
+              toolCall.tool,
+              toolCall.params,
+            );
+          } catch (e) {
+            console.error('Tool call error:', e);
+            observation = '工具调用格式错误';
+          }
+        }
+        if (observation && observation !== '工具调用格式错误') {
+          return { output_media: observation };
+        } else {
+          return { output_text: thinking };
+        }
       } else {
         const finalAnswer = await this.llmService.callOpenAI(chatContext, model);
         console.log('Agent final answer:', finalAnswer.substring(0, 100) + '...'); // log the beginning of the final answer for debugging

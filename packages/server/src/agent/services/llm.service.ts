@@ -63,6 +63,7 @@ export class LlmService {
   ): Promise<string> {
     console.log('Calling OpenAI with model:', model);
     console.log('Messages:', messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content.slice(0, 10) : '非文本内容' })));
+    console.log('bytes:', JSON.stringify(messages).length);
     try {
       // set a timeout for the OpenAI call (e.g., 30 seconds)
       const timeoutPromise = new Promise((_, reject) =>
@@ -227,7 +228,7 @@ export class LlmService {
 }
       */
       console.log('Image Gen API response received');
-      return response.data.output.choices[0].message.content;
+      return response.data.output.choices[0].message;
     } catch (error) {
       this.logger.error(`图像生成调用失败: ${(error as any).message}`);
       throw new Error('图像生成服务暂时不可用，日志已经记录');
