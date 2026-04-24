@@ -71,7 +71,7 @@ export class AgentGateway {
         };
         const imageItem = mediaList.content.find((item) => item.image);
         const textItem = mediaList.content.find((item) => item.text);
-
+        console.log('mediaList', mediaList); // log the media list for debugging
         botText = textItem?.text || '';
         if (imageItem?.image) {
           const filename = `generated-${Date.now()}.png`;

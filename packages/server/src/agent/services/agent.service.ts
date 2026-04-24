@@ -19,16 +19,16 @@ const encodeImage = (imagePath) => {
   };
 
 const genImgContent = (data, imgDir) => {
-  const content: ChatCompletionContentPartImage[] = [];
+  // const content: ChatCompletionContentPartImage[] = [];
   const imgName = data.ext.url?.split('/').pop() || '';
   console.log('imgName', imgName);
   const imgPath = path.join(imgDir, imgName);
-  content.push({
+  return {
     type: data.ext.type,
     image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
-  });
-
-  return content;
+  };
+  // console.log('Generated image content for LLM:', content); // log the generated image content for debugging
+  // return content;
 }
 
 const sessionMsgToModelMsg: (msg: { text: string; role: string, ext: ISendExt }, imgDir: string) => ChatCompletionMessageParam = (msg, imgDir) => {
@@ -36,8 +36,12 @@ const sessionMsgToModelMsg: (msg: { text: string; role: string, ext: ISendExt },
   if (msg.text) {
     content.push({ text: msg.text, type: 'text' });
   }
-  if (msg.ext && msg.ext.type !== 'text' && msg.ext.url) {
-    content.push(...genImgContent(msg, imgDir));
+  if (msg.ext && msg.ext.type === 'image_url' && msg.ext.url) {
+    if (msg.role === 'user') {
+      content.push(genImgContent(msg, imgDir));
+    } else {
+      // 如果是 system 或 assistant 角色的图片消息，不要传递图片内容给模型，模型不支持
+    }
     return {
       role: msg.role as 'user',
       content,
@@ -176,32 +180,79 @@ export class AgentService {
       const chatContext: ChatCompletionMessageParam[] = [];
       const history = await this.readHistory(sessionId);
       console.log('history', history.length);
-      let model = 'qwen-plus';
-      if (history.find(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url)) {
-        model = 'qwen-vl-plus';
+      const VERSION_MODEL = 'qwen-vl-max'; // 'qwen-vl-plus';
+      const CHAT_MODEL = 'qwen-plus';
+      let model = CHAT_MODEL;
+      const firstImage = history.find(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url);
+      const imgList = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url).map(msg => msg.ext.url).map((i, index) => index);
+      if (firstImage) {
+        model = VERSION_MODEL;
       }
       if (history.length > 0) {
-        history.slice(-8).forEach((msg) => {
+        history.slice(-8).forEach((msg, index) => {
+          console.log('历史消息', msg, index);
           chatContext.push(sessionMsgToModelMsg(msg, this.imgDir));
         });
       } else {
         chatContext.push(sessionMsgToModelMsg(data, this.imgDir));
       }
 
-      if (model === 'qwen-vl-plus') {
+      if (model === VERSION_MODEL) {
         chatContext.unshift({
           role: 'system',
-          content: `当前对话包含图片信息，请使用支持多模态的 qwen-vl-plus 模型进行回答。并判断用户意图是否为生成或修改图片，
-          如果是，需要调用 gen_img 工具进行图像生成，请严格返回工具调用的 JSON 格式指令，参数格式为：{"tool":"gen_img","params": [{ "role": "user", "content": [{ "text": "prompt" }, { "image": "url" }] }] }。
-          如果不是，直接给出回答即可。`,
+          content: `当前对话包含图片信息，图片序号列表：${JSON.stringify(imgList)}。
+判断用户意图是否为图片生成或图片修改：
+- 如果是，请判断要处理的图片索引，写入 imgIndex（从 0 开始）。
+- 仅当确认需要调用图片工具时才调用 gen_img，返回结果必须是严格 JSON：{"tool":"gen_img","imgIndex":0,"params":[{"role":"user","content":[{"text":"prompt"},{"image":"xxx"}]}]}。
+- 综合考虑用户的提示和对话上下文，整理成一个新的prompt传给text字段。
+- params 是一组消息内容，image字段为占位字段，不需要传递图片URL；text字段需要传递用户的生成或修改提示文案，需要综合多个上下文的文案。content里的 text 和 image 必须分开，[{"text": ""},{"image": ""}]，绝对不能是[{"text": "", image: ""}]。
+- JSON格式必须为合法JSON
+- 如果无法确认具体图片，请直接询问用户：请问您要修改哪一张图片？等待用户回复后再调用工具。
+- 如果用户意图不是生成或修改图片，则不要调用工具，直接给出正常回答。
+- “上一个”“前一个”“前面”等指代通常是图片序号列表中的最后一张图片。`,
         });
         const thinking = await this.llmService.callOpenAI(chatContext, model);
         console.log('Agent thinking:', thinking.substring(0, 1000) + '...'); // log the beginning of the thought for debugging
         let observation;
         if (thinking.includes('"tool"')) {
+
+          // TODO: 这里调用一下，
+          const list = history.filter(i => !i.ext || i.ext.type === 'text').map((msg, index) => {
+            return {
+              role: msg.role as 'user' | 'assistant' | 'system',
+              content: msg.text,
+            }
+          });
+          list.unshift({
+            role: 'system',
+            content: `当前对话是修改图片的对话， 请综合整理一下，生成一个prompt，直接返回prompt文字。`,
+          })
+          const promptText = await this.llmService.callOpenAI(list, CHAT_MODEL);
+
+
+          console.log('Tool call detected in thinking.', thinking); // log when a tool call is detected
           try {
             const toolCall = JSON.parse(thinking);
             console.log('Tool call:', toolCall.params);
+            if (toolCall.params.length > 0) {
+              const imageIndex = toolCall.imgIndex || 0;
+              toolCall.params.forEach((param, index) => {
+                console.log(`Tool call param ${index}:`, param, imageIndex);
+                param.content.forEach((element, ind) => {
+                  if ('image' in element) {
+                    const image = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url)[imageIndex];
+                    console.log('Matched image for tool call:', image);
+                    element.image = genImgContent(image || firstImage, this.imgDir).image_url.url;
+                  }
+                  if ('text' in element) {
+                    // 这里可以对文本进行一些特殊处理，比如替换占位符等
+                    element.text = promptText || element.text + ' ' + data.text; // 使用生成的 promptText 替换原有文本，或者保留原文本
+                  }
+                });
+                console.log(`Processed tool call param ${index}:`, param.content); // log the processed tool call param for debugging
+              });
+            }
+            console.log('Final tool call params after processing:', toolCall.params);
             observation = await this.runToolWithRetry(
               toolCall.tool,
               toolCall.params,

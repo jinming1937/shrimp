@@ -128,7 +128,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
                 )}
               </div>
               {
-                chatIdentify(msg.role) && !msg.isLoading ? (
+                chatIdentify(msg.role) && !msg.isLoading && msg.text ? (
                   <input type="button" value="say" className="text-xs text-gray-500 mt-1 cursor-pointer" onClick={() => say(msg.text, msg.id)} />
                 ): null
               }

@@ -84,7 +84,7 @@ export class LlmService {
       return result.choices[0].message.content;
     } catch (error: unknown) {
       this.logger.error(`LLM 调用失败: ${(error as any).message}`);
-      throw new Error('大模型服务暂时不可用，日志已经记录'); // 返回空对象，避免程序崩溃
+      throw new Error(`大模型服务(${model})暂时不可用，日志已经记录：LLM 调用失败: ${(error as any).message}` ); // 返回空对象，避免程序崩溃
     }
   }
 
@@ -177,6 +177,21 @@ export class LlmService {
     }
 }'
        */
+
+      // console.log('Calling Image Gen API with messages:', messages.map(m => ({ role: m.role, content: m.content.map(c => 'text' in c ? c.text.slice(0, 10) : c.image.slice(0, 100)) })));
+
+      messages.forEach((msg, index) => {
+        console.log(`Message ${index} role:`, msg.role);
+        msg.content.forEach((content, cIndex) => {
+          if ('text' in content) {
+            console.log(`Message ${index} content ${cIndex} text:`, content.text.slice(0, 10));
+          } else if ('image' in content) {
+            console.log(`Message ${index} content ${cIndex} image URL:`, content.image.slice(0, 100));
+          }
+        });
+      });
+
+      // return { role: 'assistant', content: [{ image: '' }] };
 
       const response = await axios.post(
         imageBeiJing,
