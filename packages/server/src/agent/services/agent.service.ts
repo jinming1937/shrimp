@@ -202,14 +202,14 @@ export class AgentService {
           role: 'system',
           content: `当前对话包含图片信息，图片序号列表：${JSON.stringify(imgList)}。
 判断用户意图是否为图片生成或图片修改：
-- 如果是，请判断要处理的图片索引，写入 imgIndex（从 0 开始）。
+- 如果是，请判断要处理的图片索引，写入 imgIndex（从 0 开始，通常是图片序号列表最后一个索引）。
 - 仅当确认需要调用图片工具时才调用 gen_img，返回结果必须是严格 JSON：{"tool":"gen_img","imgIndex":0,"params":[{"role":"user","content":[{"text":"prompt"},{"image":"xxx"}]}]}。
 - 综合考虑用户的提示和对话上下文，整理成一个新的prompt传给text字段。
 - params 是一组消息内容，image字段为占位字段，不需要传递图片URL；text字段需要传递用户的生成或修改提示文案，需要综合多个上下文的文案。content里的 text 和 image 必须分开，[{"text": ""},{"image": ""}]，绝对不能是[{"text": "", image: ""}]。
 - JSON格式必须为合法JSON
+- “上一个”“前一个”“前面”等指代通常是图片序号列表中倒数第二张图片。
 - 如果无法确认具体图片，请直接询问用户：请问您要修改哪一张图片？等待用户回复后再调用工具。
-- 如果用户意图不是生成或修改图片，则不要调用工具，直接给出正常回答。
-- “上一个”“前一个”“前面”等指代通常是图片序号列表中的最后一张图片。`,
+- 如果用户意图不是生成或修改图片，则不要调用工具，直接给出正常回答。`,
         });
         const thinking = await this.llmService.callOpenAI(chatContext, model);
         console.log('Agent thinking:', thinking.substring(0, 1000) + '...'); // log the beginning of the thought for debugging
@@ -228,16 +228,36 @@ export class AgentService {
             content: `当前对话是修改图片的对话， 请综合整理一下，生成一个prompt，直接返回prompt文字。`,
           })
           const promptText = await this.llmService.callOpenAI(list, CHAT_MODEL);
-
-
           console.log('Tool call detected in thinking.', thinking); // log when a tool call is detected
+          console.log('prompt text:', promptText); // log the original tool call instruction for debugging
+          let toolCall
           try {
-            const toolCall = JSON.parse(thinking);
+            toolCall = JSON.parse(thinking);
+          } catch (e) {
+            const lastImage = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url).slice(-1)[0];
+            toolCall = {
+              tool: 'gen_img',
+              params: [{
+                role: 'user',
+                content: [
+                  {
+                    text: promptText,
+                  },
+                  {
+                    image: genImgContent(lastImage, this.imgDir).image_url.url,
+                  },
+                ],
+              }]
+            };
+          }
+          
+          try {
             console.log('Tool call:', toolCall.params);
             if (toolCall.params.length > 0) {
               const imageIndex = toolCall.imgIndex || 0;
               toolCall.params.forEach((param, index) => {
-                console.log(`Tool call param ${index}:`, param, imageIndex);
+                console.log(`image index`, imageIndex);
+                console.log(`Tool call param ${index}:`, param);
                 param.content.forEach((element, ind) => {
                   if ('image' in element) {
                     const image = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url)[imageIndex];

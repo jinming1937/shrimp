@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { ChangeEventHandler, useState } from 'react';
+import React, { ChangeEventHandler, useState, useRef, useEffect } from 'react';
 import { X, ImagePlus } from 'lucide-react';
 import { ISendExt } from '../types';
 
@@ -13,8 +13,31 @@ const InputSend: React.FC<InputSendProps> = ({ onSend, theme = 'light' }) => {
   const [input, setInput] = useState('');
 
   const [previewImgUrl, setPreviewImgUrl] = useState('');
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '1.5rem';
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (textareaRef.current) {
+      // TODO: 需要优化，当前逻辑是当输入中包含换行符时才调整高度，但如果输入文字过多自动换到下一行时，也需要调整高度
+      if (e.target.value.includes('\n')) {
+        textareaRef.current.style.height = 'auto';
+        const maxHeight = 4.5 * 16; // 4.5rem assuming 1rem = 16px
+        const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
+        textareaRef.current.style.height = `${newHeight}px`;
+      } else {
+        textareaRef.current.style.height = '1.5rem';
+      }
+    }
+  };
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       if (previewImgUrl) {
         onSend(input, { type: 'image_url', url: previewImgUrl });
       } else {
@@ -84,16 +107,16 @@ const InputSend: React.FC<InputSendProps> = ({ onSend, theme = 'light' }) => {
           </button>
         </div>
       </div>
-      <div className={`flex border rounded-lg p-2 shadow-sm ${
+      <div className={`flex items-center border rounded-lg p-2 shadow-sm ${
         theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'
       }`}>
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
           value={input}
           name='text'
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          className={`flex-1 mr-2 border-none outline-none ${
+          onChange={handleChange}
+          onKeyDown={handleKeyPress}
+          className={`flex-1 mr-2 border-none outline-none resize-none overflow-y-auto max-h-[4.5rem] ${
             theme === 'dark'
               ? 'bg-gray-800 text-white placeholder-gray-400'
               : 'bg-white text-gray-900 placeholder-gray-500'
