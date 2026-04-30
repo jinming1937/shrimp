@@ -234,9 +234,11 @@ export class AgentService {
           try {
             toolCall = JSON.parse(thinking);
           } catch (e) {
-            const lastImage = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url).slice(-1)[0];
+            const imgList = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url);
+            const lastImage = imgList.slice(-1)[0];
             toolCall = {
               tool: 'gen_img',
+              imgIndex: imgList.length > 0 ? imgList.length - 1 : 0,
               params: [{
                 role: 'user',
                 content: [
