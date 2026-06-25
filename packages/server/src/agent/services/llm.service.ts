@@ -18,7 +18,8 @@ export interface IAgentGenImageMessage {
 
 const RADIO_API_CONFIG = {
   url: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
-  model: 'qwen3-tts-instruct-flash',
+  // model: 'qwen3-tts-instruct-flash',
+  model: 'paraformer-v2',
 };
 
 @Injectable()
@@ -81,10 +82,51 @@ export class LlmService {
         timeoutPromise,
       ])) as any;
       console.log('✅ OpenAI API 调用成功：', result);
-      return result.choices[0].message.content;
+      const message = result?.choices?.[0]?.message;
+      if (!message) {
+        throw new Error('OpenAI response missing message');
+      }
+      const content = message.content ?? (message as any).text ?? message;
+      if (content == null) {
+        this.logger.warn('OpenAI response has no content, returning empty string', { message });
+        return '';
+      }
+      if (typeof content === 'string') {
+        return content;
+      }
+      if (Array.isArray(content)) {
+        const text = content
+          .map((item) => {
+            if (item && typeof item === 'object') {
+              if ('text' in item && typeof item.text === 'string') {
+                return item.text;
+              }
+              if ('image' in item && typeof item.image === 'string') {
+                return item.image;
+              }
+              if ('content' in item && typeof item.content === 'string') {
+                return item.content;
+              }
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        return text || JSON.stringify(content);
+      }
+      if (typeof content === 'object') {
+        if ('text' in content && typeof content.text === 'string') {
+          return content.text;
+        }
+        if ('content' in content && typeof (content as any).content === 'string') {
+          return (content as any).content;
+        }
+        return JSON.stringify(content);
+      }
+      return String(content);
     } catch (error: unknown) {
       this.logger.error(`LLM 调用失败: ${(error as any).message}`);
-      throw new Error(`大模型服务(${model})暂时不可用，日志已经记录：LLM 调用失败: ${(error as any).message}` ); // 返回空对象，避免程序崩溃
+      throw new Error(`大模型服务(${model})暂时不可用，日志已经记录：LLM 调用失败: ${(error as any).message}` );
     }
   }
 
@@ -196,7 +238,7 @@ export class LlmService {
       const response = await axios.post(
         imageBeiJing,
         {
-          model: 'qwen-image-2.0-pro',
+          model: 'qwen-image-2.0-pro-2026-04-22',
           input: {
             messages: [
               ...messages

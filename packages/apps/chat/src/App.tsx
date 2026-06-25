@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
-import io from 'socket.io-client';
 import Sidebar from './components/Sidebar';
 import ModelHeader from './components/ModelHeader';
 import ChatWindow from './components/ChatWindow';
 import InputSend from './components/InputSend';
 import { isMobile } from './lib/utils';
 import { HistoryList } from './components/HistoryList';
-import { Message, ISendExt } from './types';
+import type { ISendExt } from './types';
 import { useStore } from './store/app';
 
 function App() {
   const { activeMsgId: currentSessionId, setActiveMsgId, messages, setMessages, addMessages } = useStore();
 
-  const [socket, setSocket] = useState<any>(null);
   const [messageStatus, setMessageStatus] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(isMobile());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -20,6 +18,7 @@ function App() {
     const saved = localStorage.getItem('theme');
     return (saved as 'light' | 'dark') || 'light';
   });
+  const [thinkingMode, setThinkingMode] = useState<boolean>(false);
 
   // 主题切换时保存到 localStorage
   const handleThemeChange = () => {
@@ -28,95 +27,103 @@ function App() {
     localStorage.setItem('theme', newTheme);
   };
 
+  const toggleThinkingMode = () => {
+    setThinkingMode((prev) => !prev);
+  };
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
   useEffect(() => {
-    const newSocket = io('http://jm.chat.ai:3000');
-    setSocket(newSocket);
-    return () => {
-      newSocket.disconnect();
-    };
+    setMessageStatus(true);
   }, []);
 
-  // listen for socket events; only attach handlers once per socket instance
-  useEffect(() => {
-    if (!socket) {
-      setMessageStatus(false);
-      return;
-    }
-
-    const handleMessage = (data: { message: Message; sessionId: string }) => {
-      // console.log('Looking for loading message with id:', data);
-      if (data.message.isLoading) {
-        // If it's a loading message, append it
-        return addMessages([data.message]);
-      } else {
-        const currentMsgId = data.message.id;
-        const matchLoadingIndex = messages.findIndex(
-          msg => msg.isLoading && msg.id === currentMsgId
-        );
-        // console.log('Matching loading index:', data, currentMsgId, messages);
-        if (matchLoadingIndex !== -1) {
-          // replace the placeholder loading message
-          return setMessages(messages.map((msg, index) =>
-            index === matchLoadingIndex ? data.message : msg
-          ));
-        } else {
-          const exists = messages.some(msg => msg.id === data.message.id);
-          if (exists) {
-            return setMessages(messages.map(msg =>
-              msg.id === data.message.id ? data.message : msg
-            ));
-          }
-          return addMessages([data.message]);
-        }
-      }
-    };
-
-    const handleJoined = () => {
-      setMessageStatus(true);
-    };
-
-    socket.on('message', handleMessage);
-    socket.on('joined', handleJoined);
-
-    // cleanup to avoid duplicate listeners when socket changes or component unmounts
-    return () => {
-      socket.off('message', handleMessage);
-      socket.off('joined', handleJoined);
-    };
-  }, [socket, currentSessionId, messages, addMessages]);
-
   const createNewSession = () => {
-    // if (currentSessionId && !historySessions.find(i => i.id === currentSessionId)) {
-      // setHistorySessions(prev => [{ id: currentSessionId, messages, firstMessage: messages[0]?.text, title: messages[0]?.text }, ...prev]);
-    // }
     setMessages([]);
     setActiveMsgId(null);
   };
 
-  const sendMessage = (input: string, ext: ISendExt) => {
+  const sendMessage = async (input: string, ext: ISendExt) => {
     const newId = currentSessionId || Date.now().toString();
     if (!currentSessionId) {
       setActiveMsgId(newId);
-      if (socket) {
-        socket.emit('joinSession', newId);
-      }
-    } else {
-      socket.emit('joinSession', currentSessionId);
     }
-    if ((input.trim() || ext.url) && socket) {
-      const messageData = {
-        message: input,
-        sessionId: newId,
-        role: 'user',
-        ext: ext
-      };
-      setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
-      // console.log('Sending message:', messageData);
-      socket.emit('sendMessage', messageData);
+
+    if (!input.trim() && !ext.url) {
+      return;
+    }
+
+    // Add user message to UI
+    setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
+
+    try {
+      const response = await fetch('http://jm.chat.ai/api/agent/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input,
+          sessionId: newId,
+          role: 'user',
+          ext: ext,
+        }),
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+
+        // Process complete lines
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              setMessages((prevMessages) => {
+                const existingIndex = prevMessages.findIndex(
+                  (msg) => msg.id === data.id,
+                );
+                if (existingIndex !== -1) {
+                  // Replace existing message
+                  return prevMessages.map((msg, index) =>
+                    index === existingIndex ? data : msg,
+                  );
+                } else {
+                  // Add new message
+                  return [...prevMessages, data];
+                }
+              });
+            } catch (err) {
+              console.error('Failed to parse SSE message:', err);
+            }
+          }
+        }
+
+        // Keep incomplete line in buffer
+        buffer = lines[lines.length - 1];
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      addMessages([
+        {
+          id: `${Date.now()}`,
+          text: 'Failed to send message. Please try again.',
+          role: 'system',
+        },
+      ]);
     }
   };
 
@@ -139,11 +146,18 @@ function App() {
       {/* Right Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Model Header */}
-        <ModelHeader modelName="OpenAI" messageStatus={messageStatus} theme={theme} onToggleCollapse={toggleSidebar} />
+        <ModelHeader
+          modelName="OpenAI"
+          messageStatus={messageStatus}
+          theme={theme}
+          onToggleCollapse={toggleSidebar}
+          thinkingMode={thinkingMode}
+          onToggleThinking={toggleThinkingMode}
+        />
 
         {/* Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <ChatWindow messages={messages} theme={theme} />
+          <ChatWindow messages={messages} theme={theme} thinkingMode={thinkingMode} />
         </div>
 
         {/* Input Area */}

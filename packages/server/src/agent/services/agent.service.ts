@@ -4,10 +4,24 @@ import { calculator } from '../tools/calculator.tool';
 import { getTime } from '../tools/time.tool';
 import { promises as fs, readFileSync } from 'fs';
 import * as path from 'path';
-import { ChatCompletionContentPart, ChatCompletionContentPartImage, ChatCompletionContentPartText, ChatCompletionMessageParam } from 'openai/resources';
+import {
+  ChatCompletionContentPart,
+  ChatCompletionContentPartImage,
+  ChatCompletionContentPartText,
+  ChatCompletionMessageParam,
+  ChatCompletionSystemMessageParam,
+  ChatCompletionUserMessageParam,
+  ChatCompletionAssistantMessageParam,
+} from 'openai/resources';
 import { WeatherService } from './weather.service';
-import { ISendExt } from 'src/types';
+import { ISendExt, IProgressEvent, OnProgressCallback } from 'src/types';
 import axios from 'axios';
+
+type ChatCompletionBasicMessageParam =
+  | ChatCompletionSystemMessageParam
+  | ChatCompletionUserMessageParam
+  | ChatCompletionAssistantMessageParam;
+
 
 // export interface IAgentGenImageMessage {
 //   context: Array<{ user: string; content: Array<{ text: string} | { image: string; }> }>
@@ -19,19 +33,28 @@ const encodeImage = (imagePath) => {
   };
 
 const genImgContent = (data, imgDir) => {
-  // const content: ChatCompletionContentPartImage[] = [];
   const imgName = data.ext.url?.split('/').pop() || '';
   console.log('imgName', imgName);
   const imgPath = path.join(imgDir, imgName);
   return {
     type: data.ext.type,
-    image_url: {"url": `data:image/png;base64,${encodeImage(imgPath)}`},
+    image_url: { url: `data:image/png;base64,${encodeImage(imgPath)}` },
   };
-  // console.log('Generated image content for LLM:', content); // log the generated image content for debugging
-  // return content;
 }
 
-const sessionMsgToModelMsg: (msg: { text: string; role: string, ext: ISendExt }, imgDir: string) => ChatCompletionMessageParam = (msg, imgDir) => {
+const genVisionImageContent = (data, imgDir) => {
+  const imgName = data.ext.url?.split('/').pop() || '';
+  console.log('vision imgName', imgName);
+  const imgPath = path.join(imgDir, imgName);
+  return {
+    type: 'image_url' as const,
+    image_url: {
+      url: `data:image/png;base64,${encodeImage(imgPath)}`,
+    },
+  };
+}
+
+const sessionMsgToModelMsg: (msg: { text: string; role: string; ext?: ISendExt }, imgDir: string) => ChatCompletionBasicMessageParam = (msg, imgDir) => {
   let content: Array<ChatCompletionContentPartImage | ChatCompletionContentPartText> = [];
   if (msg.text) {
     content.push({ text: msg.text, type: 'text' });
@@ -39,19 +62,58 @@ const sessionMsgToModelMsg: (msg: { text: string; role: string, ext: ISendExt },
   if (msg.ext && msg.ext.type === 'image_url' && msg.ext.url) {
     if (msg.role === 'user') {
       content.push(genImgContent(msg, imgDir));
-    } else {
-      // 如果是 system 或 assistant 角色的图片消息，不要传递图片内容给模型，模型不支持
     }
     return {
       role: msg.role as 'user',
       content,
-    };
-  } else {
+    } as ChatCompletionUserMessageParam;
+  }
+
+  if (msg.role === 'system') {
     return {
-      role: msg.role as 'user' | 'assistant' | 'system',
+      role: 'system',
       content: msg.text,
+    } as ChatCompletionSystemMessageParam;
+  }
+
+  if (msg.role === 'assistant') {
+    return {
+      role: 'assistant',
+      content: msg.text,
+    } as ChatCompletionAssistantMessageParam;
+  }
+
+  return {
+    role: 'user',
+    content: msg.text,
+  } as ChatCompletionUserMessageParam;
+}
+
+type QwenVisionMessage = {
+  role: 'user';
+  content: Array<{
+    type: 'text';
+    text: string;
+  } | {
+    type: 'image_url';
+    image_url: {
+      url: string;
+    };
+  }>;
+};
+
+const sessionMsgToVisionMsg: (msg: { text: string; role: string; ext?: ISendExt }, imgDir: string) => QwenVisionMessage = (msg, imgDir) => {
+  if (msg.ext && msg.ext.type === 'image_url' && msg.ext.url) {
+    return {
+      role: 'user',
+      content: [genVisionImageContent(msg, imgDir)],
     };
   }
+
+  return {
+    role: 'user',
+    content: [{ type: 'text', text: msg.text }],
+  };
 }
 
 @Injectable()
@@ -90,12 +152,12 @@ export class AgentService {
 
     // 2. 第一步：思考
     const thought = await this.llmService.callLlm(history);
-    console.log('Agent thought:', thought.substring(0, 100) + '...'); // log the beginning of the thought for debugging
+    console.log('Agent thought:', typeof thought === 'string' ? thought.substring(0, 100) + '...' : String(thought)); // log the beginning of the thought for debugging
     history.push({ role: 'assistant', content: thought });
 
     // 3. 第二步：决定动作（调用工具/直接回答）
     const action = await this.llmService.callLlm(history);
-    console.log('Agent action:', action.substring(0, 100) + '...'); // log the beginning of the action for debugging
+    console.log('Agent action:', typeof action === 'string' ? action.substring(0, 100) + '...' : String(action)); // log the beginning of the action for debugging
     let observation = '';
 
     // 解析工具调用指令
@@ -175,48 +237,123 @@ export class AgentService {
     }
   }
 
-  async onceAgent(data: { text: string; role: string, ext: ISendExt }, sessionId: string) {
+  async onceAgent(
+    data: { text: string; role: string; ext?: ISendExt },
+    sessionId: string,
+    onProgress?: OnProgressCallback,
+  ) {
+    const progress = async (event: IProgressEvent) => {
+      if (onProgress) {
+        await onProgress(event);
+      }
+    };
+
     try {
       const chatContext: ChatCompletionMessageParam[] = [];
       const history = await this.readHistory(sessionId);
       console.log('history', history.length);
-      const VERSION_MODEL = 'qwen-vl-max'; // 'qwen-vl-plus';
-      const CHAT_MODEL = 'qwen-plus';
+
+      await progress({
+        type: 'progress',
+        step: 'read_history',
+        message: `已读取会话历史，共 ${history.length} 条消息。`,
+        data: { count: history.length },
+      });
+
+      // 视觉理解模型
+      const VERSION_MODEL = 'qwen3.7-plus'; // 'wan2.7-image'; // 'qwen-vl-plus';
+      // 对话模型
+      const CHAT_MODEL = 'deepseek-v4-flash'; //  'qwen3.6-plus-2026-04-02'; // 'qwen-plus';
       let model = CHAT_MODEL;
       const firstImage = history.find(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url);
-      const imgList = history.filter(msg => msg.ext && msg.ext.type === 'image_url' && msg.ext.url).map(msg => msg.ext.url).map((i, index) => index);
+      const imgList = history.filter(msg => msg.ext?.type === 'image_url' && msg.ext.url).map(msg => msg.ext!.url).map((i, index) => index);
       if (firstImage) {
         model = VERSION_MODEL;
       }
-      if (history.length > 0) {
-        history.slice(-8).forEach((msg, index) => {
-          console.log('历史消息', msg, index);
-          chatContext.push(sessionMsgToModelMsg(msg, this.imgDir));
-        });
-      } else {
-        chatContext.push(sessionMsgToModelMsg(data, this.imgDir));
-      }
-
       if (model === VERSION_MODEL) {
-        chatContext.unshift({
-          role: 'system',
-          content: `当前对话包含图片信息，图片序号列表：${JSON.stringify(imgList)}。
+        const imageHistory = history.filter(
+          (msg) => msg.ext && msg.ext.type === 'image_url' && msg.ext.url,
+        );
+        const lastImage = imageHistory.length > 0
+          ? imageHistory[imageHistory.length - 1]
+          : data.ext?.type === 'image_url'
+          ? data
+          : null;
+        const currentText = data.text || history.filter((msg) => !msg.ext || msg.ext.type === 'text').map((msg) => msg.text).join('\n');
+        const visionText = `当前对话包含图片信息，图片序号列表：${JSON.stringify(imgList)}。
 判断用户意图是否为图片生成或图片修改：
 - 如果是，请判断要处理的图片索引，写入 imgIndex（从 0 开始，通常是图片序号列表最后一个索引）。
 - 仅当确认需要调用图片工具时才调用 gen_img，返回结果必须是严格 JSON：{"tool":"gen_img","imgIndex":0,"params":[{"role":"user","content":[{"text":"prompt"},{"image":"xxx"}]}]}。
 - 综合考虑用户的提示和对话上下文，整理成一个新的prompt传给text字段。
 - params 是一组消息内容，image字段为占位字段，不需要传递图片URL；text字段需要传递用户的生成或修改提示文案，需要综合多个上下文的文案。content里的 text 和 image 必须分开，[{"text": ""},{"image": ""}]，绝对不能是[{"text": "", image: ""}]。
-- JSON格式必须为合法JSON
+- JSON格式必须是合法JSON
 - “上一个”“前一个”“前面”等指代通常是图片序号列表中倒数第二张图片。
 - 如果无法确认具体图片，请直接询问用户：请问您要修改哪一张图片？等待用户回复后再调用工具。
-- 如果用户意图不是生成或修改图片，则不要调用工具，直接给出正常回答。`,
+- 如果用户意图不是生成或修改图片，则不要调用工具，直接给出正常回答。`;
+        const content: Array<ChatCompletionContentPartText | ChatCompletionContentPartImage> = [];
+        if (lastImage) {
+          content.push(genVisionImageContent(lastImage, this.imgDir));
+        }
+        content.push({
+          type: 'text',
+          text: currentText ? `${visionText}\n用户输入：${currentText}` : visionText,
         });
+        const visionMessage: ChatCompletionUserMessageParam = {
+          role: 'user',
+          content,
+        };
+        chatContext.push(visionMessage);
+        if (chatContext.length !== 1) {
+          throw new Error(`vision model requires exactly 1 top-level message; got ${chatContext.length}`);
+        }
+      } else if (history.length > 0) {
+        history
+          .filter((msg) => msg.ext?.type !== 'thinking')
+          .slice(-8)
+          .forEach((msg, index) => {
+            console.log('历史消息', msg, index);
+            if (msg.role === 'assistant' && msg.ext?.type === 'image_url') {
+              return;
+            }
+            chatContext.push(sessionMsgToModelMsg(msg, this.imgDir));
+          });
+      } else {
+        chatContext.push(sessionMsgToModelMsg(data, this.imgDir));
+      }
+      console.log('model: ', model);
+
+      await progress({
+        type: 'progress',
+        step: 'build_context',
+        message: `正在构造模型输入，使用模型 ${model}。`,
+        data: { model },
+      });
+
+      if (model === VERSION_MODEL) {
+        await progress({
+          type: 'model',
+          step: 'model_call',
+          message: `正在调用视觉模型 ${model}。`,
+          data: { model },
+        });
+
         const thinking = await this.llmService.callOpenAI(chatContext, model);
-        console.log('Agent thinking:', thinking.substring(0, 1000) + '...'); // log the beginning of the thought for debugging
+        const thinkingText = typeof thinking === 'string' ? thinking : '';
+        await progress({
+          type: 'model',
+          step: 'model_response',
+          message: `视觉模型响应已返回。`,
+          data: { model, length: thinkingText.length },
+        });
+        console.log('Agent thinking:', model, thinkingText.slice(0, 1000) + '...'); // log the beginning of the thought for debugging
         let observation;
         if (thinking.includes('"tool"')) {
+          await progress({
+            type: 'tool',
+            step: 'tool_detected',
+            message: '检测到工具调用，将执行工具。',
+          });
 
-          // TODO: 这里调用一下，
           const list = history.filter(i => !i.ext || i.ext.type === 'text').map((msg, index) => {
             return {
               role: msg.role as 'user' | 'assistant' | 'system',
@@ -254,6 +391,12 @@ export class AgentService {
           }
           
           try {
+            await progress({
+              type: 'tool',
+              step: 'tool_execute',
+              message: `正在执行工具 ${toolCall.tool}。`,
+              data: { tool: toolCall.tool },
+            });
             console.log('Tool call:', toolCall.params);
             if (toolCall.params.length > 0) {
               const imageIndex = toolCall.imgIndex || 0;
@@ -267,8 +410,7 @@ export class AgentService {
                     element.image = genImgContent(image || firstImage, this.imgDir).image_url.url;
                   }
                   if ('text' in element) {
-                    // 这里可以对文本进行一些特殊处理，比如替换占位符等
-                    element.text = promptText || element.text + ' ' + data.text; // 使用生成的 promptText 替换原有文本，或者保留原文本
+                    element.text = promptText || element.text + ' ' + data.text;
                   }
                 });
                 console.log(`Processed tool call param ${index}:`, param.content); // log the processed tool call param for debugging
@@ -279,9 +421,21 @@ export class AgentService {
               toolCall.tool,
               toolCall.params,
             );
+            await progress({
+              type: 'tool',
+              step: 'tool_result',
+              message: `工具执行完成：${toolCall.tool}。`,
+              data: { tool: toolCall.tool, observation },
+            });
           } catch (e) {
             console.error('Tool call error:', e);
             observation = '工具调用格式错误';
+            await progress({
+              type: 'error',
+              step: 'tool_error',
+              message: '工具调用失败。',
+              data: { error: (e as any).message },
+            });
           }
         }
         if (observation && observation !== '工具调用格式错误') {
@@ -290,11 +444,29 @@ export class AgentService {
           return { output_text: thinking };
         }
       } else {
+        await progress({
+          type: 'model',
+          step: 'model_call',
+          message: `正在调用对话模型 ${model}。`,
+          data: { model },
+        });
         const finalAnswer = await this.llmService.callOpenAI(chatContext, model);
-        console.log('Agent final answer:', finalAnswer.substring(0, 100) + '...'); // log the beginning of the final answer for debugging
+        await progress({
+          type: 'model',
+          step: 'model_response',
+          message: `对话模型响应已返回。`,
+          data: { model, length: finalAnswer.length },
+        });
+        console.log('Agent final answer:', typeof finalAnswer === 'string' ? finalAnswer.substring(0, 100) + '...' : String(finalAnswer)); // log the beginning of the final answer for debugging
         return { output_text: finalAnswer };
       }
     } catch (error: unknown) {
+      await progress({
+        type: 'error',
+        step: 'agent_error',
+        message: `Agent 执行出错：${(error as any).message || '未知错误'}`,
+        data: { error: (error as any).message },
+      });
       return { output_text: (error as any).message || 'Agent 执行出错' };
     }
   }
@@ -341,11 +513,11 @@ export class AgentService {
   ) {
     // directory where session history files will be stored
     const sessionsDir = this.sessionsDir;
-    fs.mkdir(sessionsDir, { recursive: true })
+    await fs.mkdir(sessionsDir, { recursive: true })
       .then(() => console.log('📁 Session storage ready at', sessionsDir))
       .catch(console.error);
     const filePath = path.join(sessionsDir, `${sessionId}.json`);
-    let msgs: Array<{ id: string; text: string; role: string }> = [];
+    let msgs: Array<{ id: string; text: string; role: string; ext?: ISendExt }> = [];
     try {
       const existing = await fs.readFile(filePath, 'utf-8');
       msgs = JSON.parse(existing);
@@ -362,7 +534,7 @@ export class AgentService {
     const filePath = path.join(this.sessionsDir, `${sessionId}.json`);
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(content) as Array<{ text: string; role: string, ext: ISendExt }>;
+      return JSON.parse(content) as Array<{ id: string; text: string; role: string; ext?: ISendExt }>;
     } catch (err: any) {
       if (err.code !== 'ENOENT') {
         console.error('Failed to read history for', sessionId, err);

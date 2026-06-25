@@ -8,6 +8,7 @@ import { Message } from '../types';
 interface ChatWindowProps {
   messages: Message[];
   theme?: 'light' | 'dark';
+  thinkingMode?: boolean;
 }
 
 function getCatchSpeech(messageId: string) {
@@ -31,8 +32,12 @@ function setCatchSpeech(messageId: string, url: string, expiresInSeconds: number
   localStorage.setItem(messageId, data);
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light', thinkingMode = false }) => {
   const scrollDomRef = React.useRef<HTMLDivElement>(null);
+  const thinkingLogs = React.useMemo(
+    () => messages.filter((msg) => msg.ext?.type === 'thinking'),
+    [messages],
+  );
 
   // Whenever messages change, scroll to the bottom
   React.useEffect(() => {
@@ -95,6 +100,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
   return (
     <>
       <audio ref={audioRef} id="audio-player" controls className='hidden' src={src} />
+      {thinkingMode && thinkingLogs.length > 0 ? (
+        <div className={`mb-4 rounded-lg border ${theme === 'dark' ? 'border-yellow-600 bg-yellow-950 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-900'} p-3`}> 
+          <div className="text-sm font-semibold mb-2">思考日志</div>
+          {thinkingLogs.map((log, index) => (
+            <div key={`thinking-${index}`} className="text-sm leading-5 mb-1">
+              {log.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div ref={scrollDomRef} className={`flex-1 overflow-y-auto p-4 rounded ${
         theme === 'dark'
           ? 'bg-gray-800'
@@ -116,7 +131,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
               theme === 'dark'
                 ? 'bg-gray-700'
                 : 'bg-white'
-            }`}>
+            } ${msg.ext?.type === 'thinking' ? 'border border-yellow-400 bg-yellow-50 text-yellow-900' : ''}`}>
               <div className={`markdown-content prose prose-sm ${theme === 'dark' ? 'prose-invert' : ''}`}>
                 {chatIdentify(msg.role) ? (
                   <ReactMarkdown 
