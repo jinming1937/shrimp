@@ -12,15 +12,17 @@ export class AgentController {
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   }
 
-  private async saveAndEmitProgress(
+  private async emitProgressEvent(
     res: Response,
-    sessionId: string,
     event: IProgressEvent,
+    messageId: string,
+    sessionId: string,
   ) {
     const progressMessage = {
-      id: `progress-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: messageId,
       text: event.message,
-      role: 'system' as const,
+      role: 'assistant' as const,
+      isLoading: true,
       ext: {
         type: 'thinking' as const,
         meta: {
@@ -31,7 +33,8 @@ export class AgentController {
       },
     };
 
-    if (event.persist !== false) {
+    // Do not persist intermediate progress updates by default.
+    if (event.persist === true) {
       await this.agentService.saveMessage(sessionId, progressMessage);
     }
 
@@ -49,8 +52,9 @@ export class AgentController {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
+    const botMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const progressCallback: OnProgressCallback = async (event) => {
-      await this.saveAndEmitProgress(res, data.sessionId, event);
+      await this.emitProgressEvent(res, event, botMessageId, data.sessionId);
     };
 
     try {
@@ -69,16 +73,14 @@ export class AgentController {
         type: 'progress',
         step: 'save_message',
         message: '用户消息已保存。',
+        persist: false,
       });
-
-      // generate a unique message ID for the bot response
-      const botMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       // Send loading message
       this.sendSseEvent(res, {
         id: botMessageId,
         text: 'Loading...',
-        role: 'system',
+        role: 'assistant',
         isLoading: true,
       });
 
