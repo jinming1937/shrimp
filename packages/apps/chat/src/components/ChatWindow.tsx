@@ -8,6 +8,7 @@ import { Message } from '../types';
 interface ChatWindowProps {
   messages: Message[];
   theme?: 'light' | 'dark';
+  thinkingMode?: boolean;
 }
 
 function getCatchSpeech(messageId: string) {
@@ -31,8 +32,12 @@ function setCatchSpeech(messageId: string, url: string, expiresInSeconds: number
   localStorage.setItem(messageId, data);
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light', thinkingMode = false }) => {
   const scrollDomRef = React.useRef<HTMLDivElement>(null);
+  const thinkingLogs = React.useMemo(
+    () => messages.filter((msg) => msg.ext?.type === 'thinking'),
+    [messages],
+  );
 
   // Whenever messages change, scroll to the bottom
   React.useEffect(() => {
@@ -95,7 +100,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
   return (
     <>
       <audio ref={audioRef} id="audio-player" controls className='hidden' src={src} />
-      <div ref={scrollDomRef} className={`flex-1 overflow-y-auto p-4 rounded ${
+      {thinkingMode && thinkingLogs.length > 0 ? (
+        <div className={`mb-4 rounded-lg border ${theme === 'dark' ? 'border-yellow-600 bg-yellow-950 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-900'} p-3`}> 
+          <div className="text-sm font-semibold mb-2">思考日志</div>
+          {thinkingLogs.map((log, index) => (
+            <div key={`thinking-${index}`} className="text-sm leading-5 mb-1">
+              {log.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div ref={scrollDomRef} className={`flex-1 w-full overflow-y-auto p-4 rounded ${
         theme === 'dark'
           ? 'bg-gray-800'
           : 'bg-gray-50'
@@ -103,7 +118,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
         {messages.length > 0 ? messages.map((msg, index) => (
           <div
             key={index}
-            className={`mb-2 p-2 flex items-start ${
+            className={`mb-2 w-full flex items-start ${
               msg.role === 'user' ? 'justify-end' : 'justify-start'
             }`}
           >
@@ -116,24 +131,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light' }) =>
               theme === 'dark'
                 ? 'bg-gray-700'
                 : 'bg-white'
-            }`}>
-              <div className={`prose prose-sm max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
+            } ${msg.ext?.type === 'thinking' ? 'border border-yellow-400 bg-yellow-50 text-yellow-900' : ''}`}>
+              <div className={`markdown-content prose prose-sm ${theme === 'dark' ? 'prose-invert' : ''}`}>
                 {chatIdentify(msg.role) ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.isLoading ? 'Loading...' : msg.text}</ReactMarkdown>
+                  <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}>
+                    {msg.isLoading ? 'Loading...' : msg.text}
+                  </ReactMarkdown>
                 ) : (
                   msg.isLoading ? 'Loading...' : msg.text
                 )}
               </div>
               {
-                chatIdentify(msg.role) && !msg.isLoading ? (
+                chatIdentify(msg.role) && !msg.isLoading && msg.text ? (
                   <input type="button" value="say" className="text-xs text-gray-500 mt-1 cursor-pointer" onClick={() => say(msg.text, msg.id)} />
                 ): null
               }
               {
-                msg.role === 'user' && msg.ext?.type === 'image_url' && msg.ext?.url ?
+                msg.ext?.type === 'image_url' && msg.ext?.url ?
                 (
-                  <div className="flex w-28 h-28">
-                    <img className="w-28 h-28" src={msg.ext.url} alt='图片已经过期' />
+                  <div className="flex w-80 h-80">
+                    <img className="w-full h-full object-contain" src={msg.ext.url} alt='图片已经过期' />
                   </div>
                 ) : null
               }

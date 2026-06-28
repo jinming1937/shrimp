@@ -3,9 +3,23 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import { ChatCompletionMessageParam } from 'openai/resources';
 
+export interface ITextContent {
+  text: string;
+}
+
+export interface IImageContent {
+  image: string; // 图片 URL
+}
+
+export interface IAgentGenImageMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: Array<ITextContent | IImageContent>;
+}
+
 const RADIO_API_CONFIG = {
   url: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
-  model: 'qwen3-tts-instruct-flash',
+  // model: 'qwen3-tts-instruct-flash',
+  model: 'paraformer-v2',
 };
 
 @Injectable()
@@ -18,38 +32,39 @@ export class LlmService {
   constructor() {
     // 读取 OPENAI_API_KEY 环境变量
     // const openaiApiKey = process.env.OPENAI_API_KEY;
-    const qwenApiKey = process.env.QWEN_API_KEY;
+    const apiKey = process.env.QWEN_API_KEY;
 
-    // 验证是否读取成功
-    // if (!openaiApiKey) {
-    //   console.error('❌ 未找到 OPENAI_API_KEY 环境变量，请检查配置！');
-    //   process.exit(1); // 终止程序运行
-    // }
-
-    if (!qwenApiKey) {
+    if (!apiKey) {
       console.error('❌ 未找到 QWEN_API_KEY 环境变量，请检查配置！');
       process.exit(1); // 终止程序运行
     }
 
-    // console.log('✅ 成功读取 API Key：', openaiApiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
-    console.log('✅ 成功读取 API Key：', qwenApiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
-
-    // const openai = new OpenAI({
-    //   apiKey: process.env.OPENAI_API_KEY,
-    // });
+    console.log('✅ 成功读取 API Key：', apiKey.substring(0, 8) + '...'); // 只显示前8位，保护密钥
 
     this.baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-    this.apiKey = qwenApiKey;
+    this.apiKey = apiKey;
     this.openai = new OpenAI({
       apiKey: this.apiKey,
       baseURL: this.baseUrl,
     });
+    // const openai = new OpenAI({
+    //   apiKey: process.env.OPENAI_API_KEY,
+    // });
   }
 
+  /**
+   * 通用的 OpenAI 调用接口，支持超时设置和错误处理
+   * @param messages 消息历史
+   * @param model 模型
+   * @returns 消息
+   */
   async callOpenAI(
     messages: Array<ChatCompletionMessageParam>,
     model: string,
   ): Promise<string> {
+    console.log('Calling OpenAI with model:', model);
+    console.log('Messages:', messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content.slice(0, 10) : '非文本内容' })));
+    console.log('bytes:', JSON.stringify(messages).length);
     try {
       // set a timeout for the OpenAI call (e.g., 30 seconds)
       const timeoutPromise = new Promise((_, reject) =>
@@ -67,10 +82,51 @@ export class LlmService {
         timeoutPromise,
       ])) as any;
       console.log('✅ OpenAI API 调用成功：', result);
-      return result.choices[0].message.content;
-    } catch (error) {
-      this.logger.error(`LLM 调用失败: ${error.message}`);
-      throw new Error('大模型服务暂时不可用，日志已经记录'); // 返回空对象，避免程序崩溃
+      const message = result?.choices?.[0]?.message;
+      if (!message) {
+        throw new Error('OpenAI response missing message');
+      }
+      const content = message.content ?? (message as any).text ?? message;
+      if (content == null) {
+        this.logger.warn('OpenAI response has no content, returning empty string', { message });
+        return '';
+      }
+      if (typeof content === 'string') {
+        return content;
+      }
+      if (Array.isArray(content)) {
+        const text = content
+          .map((item) => {
+            if (item && typeof item === 'object') {
+              if ('text' in item && typeof item.text === 'string') {
+                return item.text;
+              }
+              if ('image' in item && typeof item.image === 'string') {
+                return item.image;
+              }
+              if ('content' in item && typeof item.content === 'string') {
+                return item.content;
+              }
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        return text || JSON.stringify(content);
+      }
+      if (typeof content === 'object') {
+        if ('text' in content && typeof content.text === 'string') {
+          return content.text;
+        }
+        if ('content' in content && typeof (content as any).content === 'string') {
+          return (content as any).content;
+        }
+        return JSON.stringify(content);
+      }
+      return String(content);
+    } catch (error: unknown) {
+      this.logger.error(`LLM 调用失败: ${(error as any).message}`);
+      throw new Error(`大模型服务(${model})暂时不可用，日志已经记录：LLM 调用失败: ${(error as any).message}` );
     }
   }
 
@@ -121,6 +177,121 @@ export class LlmService {
     }
   }
 
+  /**
+   * 调用图像生成
+   * https://bailian.console.aliyun.com/cn-beijing?spm=5176.29597918.J_C-NDPSQ8SFKWB4aef8i6I.1.2888133cJA91xG&tab=api#/api/?type=model&url=2976416
+   */
+  async callImageGenLLM(messages: IAgentGenImageMessage[]) {
+    // https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+    const imageBeiJing = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+    try {
+      /**
+       * 
+       curl --location 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation' \
+--header 'Content-Type: application/json' \
+--header "Authorization: Bearer $QWEN_API_KEY" \
+--data '{
+    "model": "qwen-image-2.0-pro",
+    "input": {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "image": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260310/rdsgaa/image+%2815%29.png"
+                    },
+                    {
+                        "image": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260310/qokhtl/image+%2816%29.png"
+                    },
+                    {
+                        "text": "使用图一的城市照片作为底图。请勿更改照片中的真实建筑、街道、车辆或人物。保持照片的真实性。三个图二中的卡通形象在建筑物周围，一个趴在建筑物上方，一个从建筑物的右边探出头来，一个坐在建筑物前的空地上。该形象应采用扁平化的图形风格绘制，轮廓清晰，类似于壁画或海报插图。"
+                    }
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "n": 1,
+        "negative_prompt": " ",
+        "prompt_extend": true,
+        "watermark": false,
+        "size": "1024*1024"
+    }
+}'
+       */
+
+      // console.log('Calling Image Gen API with messages:', messages.map(m => ({ role: m.role, content: m.content.map(c => 'text' in c ? c.text.slice(0, 10) : c.image.slice(0, 100)) })));
+
+      messages.forEach((msg, index) => {
+        console.log(`Message ${index} role:`, msg.role);
+        msg.content.forEach((content, cIndex) => {
+          if ('text' in content) {
+            console.log(`Message ${index} content ${cIndex} text:`, content.text.slice(0, 10));
+          } else if ('image' in content) {
+            console.log(`Message ${index} content ${cIndex} image URL:`, content.image.slice(0, 100));
+          }
+        });
+      });
+
+      // return { role: 'assistant', content: [{ image: '' }] };
+
+      const response = await axios.post(
+        imageBeiJing,
+        {
+          model: 'qwen-image-2.0-pro-2026-04-22',
+          input: {
+            messages: [
+              ...messages
+            ],
+          },
+          "parameters": {
+              "n": 1,
+              "negative_prompt": " ",
+              "prompt_extend": true,
+              "watermark": false,
+              "size": "1024*1024"
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+      /***
+{
+    "output": {
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "content": [
+                        {
+                            "image": "https://dashscope-result-sz.oss-cn-shenzhen.aliyuncs.com/xxx.png?Expires=xxx"
+                        }
+                    ],
+                    "role": "assistant"
+                }
+            }
+        ]
+    },
+    "usage": {
+        "height": 2048,
+        "image_count": 1,
+        "width": 2048
+    },
+    "request_id": "571ae02f-5c9d-436c-83c2-f221e6df0xxx"
+}
+      */
+      console.log('Image Gen API response received');
+      return response.data.output.choices[0].message;
+    } catch (error) {
+      this.logger.error(`图像生成调用失败: ${(error as any).message}`);
+      throw new Error('图像生成服务暂时不可用，日志已经记录');
+    }
+  }
+
   async callImg2SVGLLM() {
     // qwen-vl-plus
     const model = 'qwen-vl-plus';
@@ -153,8 +324,8 @@ export class LlmService {
         },
       );
       return response.data.choices[0].message.content;
-    } catch (error) {
-      this.logger.error(`LLM 调用失败: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`LLM 调用失败: ${(error as any).message}`);
       throw new Error('大模型服务暂时不可用');
     }
   }

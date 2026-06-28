@@ -15,4 +15,8 @@ export interface Session {
   firstMessage?: string;
 }
 
-export type ISendExt = { type: 'image_url' | 'video_url' | 'text', url?: string }
+export type ISendExt = {
+  type: 'image_url' | 'video_url' | 'text' | 'thinking';
+  url?: string;
+  meta?: Record<string, any>;
+}

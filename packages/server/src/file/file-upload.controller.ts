@@ -21,7 +21,7 @@ const UPLOAD_DIR = path.resolve(__dirname, '../../../../.chat/imgs');
 const MimeType: Record<string, string> = {
   png: 'image/png',
   gif: 'image/gif',
-  jpg: 'image/jpeg',
+  jpg: 'image/jpg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
 };
@@ -99,7 +99,6 @@ export class FileUploadController {
 
     const ext = path.extname(safeName).slice(1).toLowerCase();
     const contentType = MimeType[ext] ?? 'application/octet-stream';
-    console.log('okkkk', contentType);
     res.setHeader('Content-Type', contentType);
 
     return res.sendFile(safeName, { root: UPLOAD_DIR });
