@@ -58,7 +58,7 @@ function App() {
     setMessages([...messages, { id: `${Date.now()}`, text: input, role: 'user', ext: ext }]);
 
     try {
-      const response = await fetch('http://jm.chat.ai/api/agent/chat', {
+      const response = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

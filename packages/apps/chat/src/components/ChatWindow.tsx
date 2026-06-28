@@ -110,7 +110,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light', thin
           ))}
         </div>
       ) : null}
-      <div ref={scrollDomRef} className={`flex-1 overflow-y-auto p-4 rounded ${
+      <div ref={scrollDomRef} className={`flex-1 w-full overflow-y-auto p-4 rounded ${
         theme === 'dark'
           ? 'bg-gray-800'
           : 'bg-gray-50'
@@ -118,7 +118,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, theme = 'light', thin
         {messages.length > 0 ? messages.map((msg, index) => (
           <div
             key={index}
-            className={`mb-2 p-2 flex items-start ${
+            className={`mb-2 w-full flex items-start ${
               msg.role === 'user' ? 'justify-end' : 'justify-start'
             }`}
           >

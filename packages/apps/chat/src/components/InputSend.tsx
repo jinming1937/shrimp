@@ -24,14 +24,12 @@ const InputSend: React.FC<InputSendProps> = ({ onSend, theme = 'light' }) => {
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     if (textareaRef.current) {
-      // TODO: 需要优化，当前逻辑是当输入中包含换行符时才调整高度，但如果输入文字过多自动换到下一行时，也需要调整高度
-      if (e.target.value.includes('\n')) {
+      const minHeight = 1.5 * 16;
+      const maxHeight = 4.5 * 16;
+      textareaRef.current.style.height = `${minHeight}px`;
+      if (textareaRef.current.scrollHeight > textareaRef.current.clientHeight) {
         textareaRef.current.style.height = 'auto';
-        const maxHeight = 4.5 * 16; // 4.5rem assuming 1rem = 16px
-        const newHeight = Math.min(textareaRef.current.scrollHeight, maxHeight);
-        textareaRef.current.style.height = `${newHeight}px`;
-      } else {
-        textareaRef.current.style.height = '1.5rem';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, maxHeight)}px`;
       }
     }
   };
